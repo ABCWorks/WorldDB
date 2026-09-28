@@ -1,8 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { eras, type Era } from './data';
-import { gameMarkup, bindGame, disposeGame } from './game';
-import { lessonMarkup, bindLesson, disposeLesson } from './lesson';
 import './style.css';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
@@ -189,22 +187,34 @@ document.addEventListener('keydown', event => {
 });
 reducedMotion.addEventListener('change', () => { if (controls) { controls.autoRotate = !reducedMotion.matches; controls.enableDamping = !reducedMotion.matches; } });
 const siteTitle = 'WorldDB — descubra histórias com SQL';
+type GameModule = typeof import('./game');
+type LessonModule = typeof import('./lesson');
+let gameModule: GameModule | undefined;
+let lessonModule: LessonModule | undefined;
+let renderRequest = 0;
 
-function render(): void {
+async function render(): Promise<void> {
+  const request = ++renderRequest;
   disposeGlobe();
-  disposeGame();
-  disposeLesson();
+  gameModule?.disposeGame();
+  lessonModule?.disposeLesson();
   document.title = siteTitle;
   if (location.pathname === '/aprender' || location.pathname === '/aprender/') history.replaceState({}, '', '/aprender/01');
   if (location.pathname === '/aprender/01') {
+    const lesson = lessonModule ?? await import('./lesson');
+    lessonModule = lesson;
+    if (request !== renderRequest) return;
     document.title = 'Documentação 01: Primeiras consultas — WorldDB';
-    app.innerHTML = `${header('learn')}${lessonMarkup()}`;
-    bindLesson(app);
+    app.innerHTML = `${header('learn')}${lesson.lessonMarkup()}`;
+    lesson.bindLesson(app);
   } else if (location.pathname === '/jogar') {
+    const game = gameModule ?? await import('./game');
+    gameModule = game;
+    if (request !== renderRequest) return;
     document.documentElement.style.setProperty('--era', eras[0].accent);
     document.documentElement.style.setProperty('--era-pale', eras[0].pale);
-    app.innerHTML = gameMarkup(sceneArt);
-    bindGame(app, sceneArt);
+    app.innerHTML = game.gameMarkup(sceneArt);
+    game.bindGame(app, sceneArt);
   } else if (location.pathname === '/explorar') renderExplore();
   else renderHome();
 }
@@ -214,8 +224,8 @@ document.addEventListener('click', event => {
   if (!link || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button !== 0) return;
   event.preventDefault();
   if (location.pathname !== link.pathname) history.pushState({}, '', link.pathname);
-  render();
+  void render();
   window.scrollTo({ top: 0, behavior: 'instant' });
 });
-window.addEventListener('popstate', render);
-render();
+window.addEventListener('popstate', () => { void render(); });
+void render();

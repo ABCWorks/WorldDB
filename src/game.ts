@@ -1,6 +1,6 @@
 import { relations, tableGuide, type TableGuide } from './story-data';
 import { createSqlClient, type Cell, type QueryResult } from './sql-client';
-import { editorMarkup, escapeHtml, insertToken, setEditorStatus, syncEditor, syncEditorScroll } from './sql-ui';
+import { destroySqlEditors, editorMarkup, escapeHtml, getSqlEditor, insertToken, mountSqlEditor, setEditorStatus } from './sql-ui';
 import './game.css';
 
 type SceneArt = (type: string, label: string) => string;
@@ -639,17 +639,19 @@ function refresh(...regions: Region[]): void {
 
 function mount(): void {
   if (!root) return;
+  destroySqlEditors(root);
   root.innerHTML = gameMarkup(artFn);
   afterRender();
   window.scrollTo({ top: 0, behavior: 'instant' });
 }
 
 function afterRender(): void {
-  const editor = root?.querySelector<HTMLTextAreaElement>('#sql-editor');
-  if (editor) {
-    editor.value = readDraft() ?? moments[state.phase].starter;
-    syncEditor(editor);
-  }
+  const host = root?.querySelector<HTMLElement>('#sql-editor');
+  if (host) mountSqlEditor(host, {
+    value: readDraft() ?? moments[state.phase].starter,
+    onChange: saveDraft,
+    onRun: () => { void runQuery(); }
+  });
   if (ui.bankTab === 'records') ensureRecords(ui.recordsTable);
 }
 
@@ -714,7 +716,7 @@ function setBusy(busy: boolean): void {
 }
 
 async function runQuery(): Promise<void> {
-  const editor = root?.querySelector<HTMLTextAreaElement>('#sql-editor');
+  const editor = getSqlEditor(root?.querySelector<HTMLElement>('#sql-editor'));
   if (!editor || ui.processing) return;
   if (!editor.value.replace(/--[^\n]*/g, '').trim()) {
     ui.error = 'Digite uma consulta antes de executar.';
@@ -863,6 +865,7 @@ function onClick(event: MouseEvent): void {
 
 export function disposeGame(): void {
   controller?.abort();
+  destroySqlEditors(root);
   controller = undefined;
 }
 
@@ -873,19 +876,6 @@ export function bindGame(app: HTMLDivElement, sceneArt: SceneArt): void {
   root = app;
   artFn = sceneArt;
   app.addEventListener('click', onClick, { signal });
-  app.addEventListener('input', event => {
-    const editor = event.target as HTMLTextAreaElement;
-    if (editor.id !== 'sql-editor') return;
-    syncEditor(editor);
-    saveDraft(editor.value);
-  }, { signal });
-  app.addEventListener('scroll', event => { if ((event.target as HTMLElement).id === 'sql-editor') syncEditorScroll(event.target as HTMLTextAreaElement); }, { signal, capture: true });
-  app.addEventListener('keydown', event => {
-    if ((event.target as HTMLElement).id === 'sql-editor' && event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
-      event.preventDefault();
-      void runQuery();
-    }
-  }, { signal });
   app.addEventListener('click', event => {
     const dialog = event.target as HTMLElement;
     if (dialog instanceof HTMLDialogElement && dialog.id === 'play-map') dialog.close();

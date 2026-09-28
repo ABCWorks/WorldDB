@@ -129,7 +129,8 @@
 .lesson-try-task{font-size:1.2rem;letter-spacing:-.02em;line-height:1.35;margin:12px 0 0}
 .lesson-try .play-editor{margin-top:12px}
 .lesson-try .play-editor-body{min-height:110px}
-.lesson-try .play-code textarea{min-height:84px}
+.lesson-try .play-code-editor,.lesson-try .play-code-editor .cm-editor{min-height:110px}
+.lesson-try .play-code-editor .cm-content{min-height:84px}
 .lesson-try-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-top:14px}
 .lesson-try-run{min-height:48px;font-size:1rem}
 .lesson-try-feedback{display:flex;flex-direction:column;gap:8px;margin-top:12px}

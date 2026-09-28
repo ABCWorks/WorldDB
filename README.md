@@ -26,6 +26,12 @@ npm run build
 npm run preview
 ```
 
+## Editor SQL
+
+O jogo e os exercícios da documentação usam o mesmo editor baseado no **CodeMirror 6**, com o dialeto SQLite. A escolha prioriza suporte mantido a SQL, navegação por teclado e leitor de tela, histórico de desfazer/refazer, seleção e rolagem nativas e integração modular sem carregar recursos de uma IDE completa.
+
+No build de produção medido durante a migração, o CodeMirror ficou em um chunk carregado sob demanda de `334,52 kB` (`110,87 kB` gzip). Jogo e documentação também passaram a ser carregados por rota; com isso, o chunk inicial caiu de `603,85 kB` (`161,02 kB` gzip) para `526,28 kB` (`135,76 kB` gzip), e quem abre apenas a página inicial não baixa o editor. O editor foi verificado no jogo e na documentação em desktop e nas larguras mobile de 320, 375 e 390 px, sem rolagem horizontal da página.
+
 ## Deploy automatico no Debian
 
 O workflow `.github/workflows/deploy.yml` compila e publica o site somente em pushes para `main`. A branch padrao de desenvolvimento e `develop`; integre `develop` em `main` quando quiser publicar. Como o servidor usa um IP privado, o job roda em um GitHub Actions runner self-hosted instalado no proprio Debian.

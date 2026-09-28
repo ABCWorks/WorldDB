@@ -1,5 +1,5 @@
 import { createSqlClient, type Cell, type QueryResult } from './sql-client';
-import { editorMarkup, escapeHtml, highlightSql, insertToken, setEditorStatus, syncEditor, syncEditorScroll } from './sql-ui';
+import { destroySqlEditors, editorMarkup, escapeHtml, getSqlEditor, highlightSql, insertToken, mountSqlEditor, setEditorStatus } from './sql-ui';
 import { lessonExamples, lessonExercises, missionColumns, type Exercise } from './lesson-data';
 import './lesson.css';
 
@@ -356,7 +356,7 @@ function judge(result: QueryResult, exercise: Exercise, sql: string): { ok: bool
 
 async function runExercise(id: string): Promise<void> {
   const exercise = lessonExercises.find(item => item.id === id);
-  const editor = root?.querySelector<HTMLTextAreaElement>(`#try-${id}`);
+  const editor = getSqlEditor(root?.querySelector<HTMLElement>(`#try-${id}`));
   if (!exercise || !editor || feedback.get(id)?.tone === 'busy') return;
   if (!editor.value.replace(/--[^\n]*/g, '').trim()) {
     feedback.set(id, { tone: 'hint', html: '<p>Escreva uma consulta antes de testar. O modelo já dá um empurrãozinho.</p>' });
@@ -486,10 +486,13 @@ export function lessonMarkup(): string {
 }
 
 function initEditors(): void {
-  root?.querySelectorAll<HTMLTextAreaElement>('.lesson-try textarea').forEach(editor => {
-    const id = editor.id.replace(/^try-/, '');
-    editor.value = drafts.get(id) ?? lessonExercises.find(item => item.id === id)!.starter;
-    syncEditor(editor);
+  root?.querySelectorAll<HTMLElement>('.lesson-try .play-code-editor').forEach(host => {
+    const id = host.id.replace(/^try-/, '');
+    mountSqlEditor(host, {
+      value: drafts.get(id) ?? lessonExercises.find(item => item.id === id)!.starter,
+      onChange: value => drafts.set(id, value),
+      onRun: () => { void runExercise(id); }
+    });
   });
 }
 
@@ -497,7 +500,9 @@ function renderStep(focusSelector?: string): void {
   if (!root) return;
   const race = new Map<string, number>();
   root.querySelectorAll<HTMLElement>('.lesson-race li[data-key]').forEach(item => race.set(item.dataset.key!, item.getBoundingClientRect().top));
-  root.querySelector('#lesson-body')!.innerHTML = stepMarkup();
+  const body = root.querySelector('#lesson-body')!;
+  destroySqlEditors(body);
+  body.innerHTML = stepMarkup();
   root.querySelector('.lesson-nav')!.outerHTML = navMarkup();
   refreshProgress();
   initEditors();
@@ -557,19 +562,20 @@ function onClick(event: MouseEvent): void {
     const exercise = lessonExercises.find(item => item.id === target.dataset.ex)!;
     hintLevel.set(exercise.id, Math.min((hintLevel.get(exercise.id) ?? 0) + 1, exercise.hints.length));
     refreshExercise(exercise);
-    if (target.hasAttribute('disabled')) root?.querySelector<HTMLElement>(`#try-${exercise.id}`)?.focus();
+    if (target.hasAttribute('disabled')) getSqlEditor(root?.querySelector<HTMLElement>(`#try-${exercise.id}`))?.focus();
   } else if (act === 'try-reset') {
     const exercise = lessonExercises.find(item => item.id === target.dataset.ex)!;
-    const editor = root?.querySelector<HTMLTextAreaElement>(`#try-${exercise.id}`);
+    const editor = getSqlEditor(root?.querySelector<HTMLElement>(`#try-${exercise.id}`));
     drafts.delete(exercise.id);
     feedback.delete(exercise.id);
-    if (editor) { editor.value = exercise.starter; syncEditor(editor); setEditorStatus(editor, 'base de treino · Ctrl + Enter testa'); editor.focus(); }
+    if (editor) { editor.value = exercise.starter; setEditorStatus(editor, 'base de treino · Ctrl + Enter testa'); editor.focus(); }
     refreshExercise(exercise);
   } else if (act === 'token') insertToken(target);
 }
 
 export function disposeLesson(): void {
   controller?.abort();
+  destroySqlEditors(root);
   controller = undefined;
 }
 
@@ -579,20 +585,6 @@ export function bindLesson(app: HTMLElement): void {
   const { signal } = controller;
   root = app;
   app.addEventListener('click', onClick, { signal });
-  app.addEventListener('input', event => {
-    const editor = event.target as HTMLTextAreaElement;
-    if (!editor.matches('.lesson-try textarea')) return;
-    drafts.set(editor.id.replace(/^try-/, ''), editor.value);
-    syncEditor(editor);
-  }, { signal });
-  app.addEventListener('scroll', event => { if ((event.target as HTMLElement).matches?.('.lesson-try textarea')) syncEditorScroll(event.target as HTMLTextAreaElement); }, { signal, capture: true });
-  app.addEventListener('keydown', event => {
-    const editor = event.target as HTMLElement;
-    if (editor.matches('.lesson-try textarea') && event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
-      event.preventDefault();
-      void runExercise(editor.id.replace(/^try-/, ''));
-    }
-  }, { signal });
   history.replaceState(history.state, '', `${lessonPath}#passo-${saved.step + 1}`);
   save();
   initEditors();
