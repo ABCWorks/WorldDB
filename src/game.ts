@@ -1,6 +1,6 @@
 import { relations, tableGuide, type TableGuide } from './story-data';
 import { createSqlClient, type Cell, type QueryResult } from './sql-client';
-import { destroySqlEditors, editorMarkup, escapeHtml, getSqlEditor, insertToken, mountSqlEditor, setEditorStatus } from './sql-ui';
+import { createSqlSlot, destroySqlEditors, editorMarkup, escapeHtml, getSqlEditor, insertToken, mountSqlEditor, setEditorStatus } from './sql-ui';
 import './game.css';
 
 type SceneArt = (type: string, label: string) => string;
@@ -14,6 +14,7 @@ type Moment = {
   after: { narration: string; line: Line };
   question: string; task: string; lesson: string; hints: string[];
   starter: string; tokens: string[];
+  guide?: { label: string; choices: string[] };
   blank: string; filled: (rows: Cell[][]) => string; journal: (rows: Cell[][]) => string;
   success: string;
   highlight?: { cells: string[]; label: string };
@@ -56,8 +57,9 @@ const moments: Moment[] = [
     task: `Mostre ${code('id')} e ${code('nome')} de todos os personagens.`,
     lesson: 'SELECT escolhe as colunas; FROM indica de qual tabela elas vêm.',
     hints: ['Comece pela tabela personagens. Procure as colunas id e nome.', 'Uma forma é SELECT id, nome FROM personagens;'],
-    starter: 'SELECT \nFROM personagens\n-- quais colunas mostram o id e o nome?',
+    starter: `SELECT ${createSqlSlot('coluna 1')}, ${createSqlSlot('coluna 2')}\nFROM personagens;`,
     tokens: ['id', ',', 'nome', 'FROM', ';'],
+    guide: { label: 'Complete os espaços na ordem:', choices: ['id', 'nome'] },
     blank: `No livro de convidados há ${blank('__')} nomes.`,
     filled: rows => `No livro de convidados há ${clue(rows.length)} nomes.`,
     journal: rows => `Convidados no livro: ${clue(rows.length)}`,
@@ -78,8 +80,9 @@ const moments: Moment[] = [
     task: `Mostre ${code('personagem_id')} e ${code('horario')} das visitas ao Pomar.`,
     lesson: 'WHERE guarda só as linhas que atendem à condição. No mapa, o Pomar tem id 1.',
     hints: ['A tabela visitas guarda personagem_id, local_id e horario.', 'Filtre com WHERE local_id = 1 depois de FROM visitas.'],
-    starter: 'SELECT personagem_id, horario\nFROM visitas\nWHERE \n-- que coluna diz o lugar?',
+    starter: `SELECT personagem_id, horario\nFROM visitas\nWHERE ${createSqlSlot('coluna')} = ${createSqlSlot('valor')};`,
     tokens: ['local_id', '=', '1', 'horario', ';'],
+    guide: { label: 'Complete a condição do Pomar:', choices: ['local_id', '1'] },
     blank: `Depois de Adão, o primeiro a passar pelo Pomar foi ${blank()} às ${blank('__:__')}.`,
     filled: rows => { const row = afterAdam(rows); return `Depois de Adão, o primeiro a passar pelo Pomar foi ${clue(idOf(row))} às ${clue(timeOf(row))}.`; },
     journal: rows => { const row = afterAdam(rows); return `Depois de Adão: ${clue(idOf(row))} às ${clue(timeOf(row))}`; },
@@ -102,8 +105,9 @@ const moments: Moment[] = [
     task: `Encontre ${code('personagem_id')} e ${code('horario')} de quem passou pelo Pomar entre 08:40 e 08:45.`,
     lesson: 'AND combina condições. BETWEEN inclui os dois horários nas pontas.',
     hints: ['Use visitas e combine local_id = 1 com um intervalo em horario.', "Depois de WHERE local_id = 1, acrescente AND horario BETWEEN '08:40' AND '08:45'."],
-    starter: 'SELECT personagem_id, horario\nFROM visitas\nWHERE local_id = 1\n  AND \n-- horario entre 08:40 e 08:45',
+    starter: `SELECT personagem_id, horario\nFROM visitas\nWHERE local_id = 1\n  AND ${createSqlSlot('coluna')} BETWEEN ${createSqlSlot('início')} AND ${createSqlSlot('fim')};`,
     tokens: ['horario', 'BETWEEN', "'08:40'", 'AND', "'08:45'"],
+    guide: { label: 'Complete o intervalo de horário:', choices: ['horario', "'08:40'", "'08:45'"] },
     blank: `Entre 08:40 e 08:45, só ${blank()} passou pelo Pomar.`,
     filled: rows => `Entre 08:40 e 08:45, só ${clue(who(idOf(rows[0])))} passou pelo Pomar.`,
     journal: rows => `Entre 08:40 e 08:45: ${clue(who(idOf(rows[0])))}`,
@@ -576,7 +580,7 @@ function queryMarkup(): string {
   const moment = moments[state.phase];
   return `<section class="play-query" data-pane="consulta" aria-label="Consulta">
     ${missionMarkup()}
-    ${editorMarkup({ id: 'sql-editor', label: 'consulta.sql', status: 'Ctrl + Enter executa', statusId: 'editor-status', tokens: moment.tokens, describedBy: 'play-task' })}
+    ${editorMarkup({ id: 'sql-editor', label: 'consulta.sql', status: moment.guide ? 'Preencha os espaços' : 'Ctrl + Enter executa', statusId: 'editor-status', tokens: moment.tokens, assist: moment.guide, describedBy: 'play-task' })}
     <div class="play-run"><button type="button" class="game-button play-run-button" data-act="run">Executar consulta →</button><button type="button" class="text-button" data-act="hint">Preciso de uma dica</button>${guideLink('text-button play-guide')}</div>
     <div id="play-result" class="play-result" role="status" aria-live="polite">${resultInner()}</div>
   </section>`;
@@ -649,6 +653,7 @@ function afterRender(): void {
   const host = root?.querySelector<HTMLElement>('#sql-editor');
   if (host) mountSqlEditor(host, {
     value: readDraft() ?? moments[state.phase].starter,
+    guided: !!moments[state.phase].guide,
     onChange: saveDraft,
     onRun: () => { void runQuery(); }
   });
@@ -657,7 +662,8 @@ function afterRender(): void {
 
 /* ---------- Rascunho ---------- */
 
-const draftKey = 'worlddb-garden-draft-v1';
+// v3 reinicia rascunhos criados antes de os campos guiados permanecerem editáveis.
+const draftKey = 'worlddb-garden-draft-v3';
 
 function readDraft(): string | null {
   try {
@@ -718,7 +724,13 @@ function setBusy(busy: boolean): void {
 async function runQuery(): Promise<void> {
   const editor = getSqlEditor(root?.querySelector<HTMLElement>('#sql-editor'));
   if (!editor || ui.processing) return;
-  if (!editor.value.replace(/--[^\n]*/g, '').trim()) {
+  if (editor.remainingSlots) {
+    ui.error = `Preencha ${editor.remainingSlots === 1 ? 'o espaço que falta' : `os ${editor.remainingSlots} espaços que faltam`} antes de executar.`;
+    setEditorStatus(editor, `${editor.remainingSlots} ${editor.remainingSlots === 1 ? 'espaço restante' : 'espaços restantes'}`);
+    refresh('result');
+    return;
+  }
+  if (!editor.executableValue.replace(/--[^\n]*/g, '').trim()) {
     ui.error = 'Digite uma consulta antes de executar.';
     refresh('result');
     return;
@@ -731,7 +743,7 @@ async function runQuery(): Promise<void> {
   refresh('result');
   const started = performance.now();
   try {
-    const result = await execute(editor.value);
+    const result = await execute(editor.executableValue);
     if (state.phase !== phase || !editor.isConnected) return;
     const elapsed = Math.max(1, Math.round(performance.now() - started));
     ui.processing = false;
