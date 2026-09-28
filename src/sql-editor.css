@@ -22,7 +22,6 @@
   .play-code-editor .cm-scroller{font-size:.94rem}
   .play-editor .play-code-editor .cm-content{min-height:126px;padding:12px 0}
   .play-editor .play-code-editor .cm-line{padding:0 12px 0 6px}
-  .play-editor .play-code-editor .cm-gutters{padding:12px 0}
   .play-editor .play-code-editor .cm-lineNumbers .cm-gutterElement{min-width:28px;padding:0 8px 0 4px}
   .play-tokens{display:flex}
 }

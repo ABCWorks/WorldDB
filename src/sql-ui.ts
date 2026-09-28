@@ -31,7 +31,7 @@ const editorTheme = EditorView.theme({
   '.cm-line': { padding: '0 16px 0 8px' },
   '.cm-cursor, .cm-dropCursor': { borderLeftColor: '#fff9e9' },
   '.cm-selectionBackground, &.cm-focused .cm-selectionBackground, ::selection': { backgroundColor: '#ffffff38' },
-  '.cm-gutters': { backgroundColor: '#34364a', color: '#77788f', border: 'none', padding: '14px 0' },
+  '.cm-gutters': { backgroundColor: '#34364a', color: '#77788f', border: 'none' },
   '.cm-lineNumbers .cm-gutterElement': { minWidth: '34px', padding: '0 10px 0 6px' },
   '.cm-activeLine, .cm-activeLineGutter': { backgroundColor: '#ffffff0a' },
   '.cm-placeholder': { color: '#8a8ba3', fontStyle: 'normal' }
