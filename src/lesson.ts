@@ -127,7 +127,7 @@ function columnsFigure(): string {
     <svg viewBox="0 0 360 262" role="img" aria-labelledby="fig2-title"><title id="fig2-title">Das cinco colunas da tabela, só nome e tarefa seguem para o resultado.</title>
       <rect x="14" y="20" width="332" height="110" rx="10" fill="#fffdf6"/>${top}<line x1="14" y1="48" x2="346" y2="48" stroke="#34364a" stroke-width="2"/><rect x="14" y="20" width="332" height="110" rx="10" fill="none" stroke="#34364a" stroke-width="2"/>
       <path d="M140 134 C140 150 160 150 160 166" class="fg-arrow is-hot"/><path d="M224 134 C224 150 200 150 200 166" class="fg-arrow is-hot"/>
-      <rect x="226" y="142" width="124" height="22" rx="11" fill="#34364a"/><text x="288" y="157" text-anchor="middle" class="fg-mono fg-inverse">SELECT nome, tarefa</text>
+      <rect x="206" y="142" width="144" height="22" rx="11" fill="#34364a"/><text x="278" y="157" text-anchor="middle" class="fg-mono fg-inverse">SELECT nome, tarefa</text>
       <rect x="105" y="179" width="156" height="72" rx="9" fill="#34364a"/><rect x="102" y="176" width="156" height="72" rx="9" fill="#fffdf6" stroke="#34364a" stroke-width="2"/>${result}<line x1="102" y1="200" x2="258" y2="200" stroke="#34364a" stroke-width="1.5"/>
       <text x="16" y="200" class="fg-label">resultado</text><text x="16" y="216" class="fg-small">só o que</text><text x="16" y="230" class="fg-small">foi pedido</text>
     </svg>
