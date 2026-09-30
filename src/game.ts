@@ -671,12 +671,16 @@ function mount(): void {
 
 function afterRender(): void {
   const host = root?.querySelector<HTMLElement>('#sql-editor');
-  if (host) mountSqlEditor(host, {
-    value: readDraft() ?? moments[state.phase].starter,
-    guided: !!moments[state.phase].guide,
-    onChange: saveDraft,
-    onRun: () => { void runQuery(); }
-  });
+  if (host) {
+    const moment = moments[state.phase];
+    const guided = !!moment.guide;
+    mountSqlEditor(host, {
+      value: guided ? moment.starter : readDraft() ?? moment.starter,
+      guided,
+      onChange: guided ? undefined : saveDraft,
+      onRun: () => { void runQuery(); }
+    });
+  }
   if (ui.bankTab === 'records') ensureRecords(ui.recordsTable);
 }
 
