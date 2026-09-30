@@ -63,7 +63,7 @@ const moments: Moment[] = [
       label: 'Escolha um valor para',
       fields: [
         { slot: 'coluna 1', choices: ['id', 'nome'] },
-        { slot: 'coluna 2', choices: ['nome', 'id'] }
+        { slot: 'coluna 2', choices: ['id', 'nome'] }
       ]
     },
     blank: `No livro de convidados há ${blank('__')} nomes.`,
