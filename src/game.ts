@@ -62,8 +62,8 @@ const moments: Moment[] = [
     guide: {
       label: 'Escolha um valor para',
       fields: [
-        { slot: 'coluna 1', choices: ['id', 'nome'] },
-        { slot: 'coluna 2', choices: ['id', 'nome'] }
+        { slot: 'coluna 1', choices: ['id', 'nome', 'papel', 'apelido'] },
+        { slot: 'coluna 2', choices: ['id', 'nome', 'papel', 'apelido'] }
       ]
     },
     blank: `No livro de convidados há ${blank('__')} nomes.`,
@@ -91,8 +91,8 @@ const moments: Moment[] = [
     guide: {
       label: 'Escolha um valor para',
       fields: [
-        { slot: 'coluna', choices: ['local_id'] },
-        { slot: 'valor', choices: ['1'] }
+        { slot: 'coluna', choices: ['personagem_id', 'local_id', 'horario'] },
+        { slot: 'valor', choices: ['1', '2', '3'] }
       ]
     },
     blank: `Depois de Adão, o primeiro a passar pelo Pomar foi ${blank()} às ${blank('__:__')}.`,
@@ -122,9 +122,9 @@ const moments: Moment[] = [
     guide: {
       label: 'Escolha um valor para',
       fields: [
-        { slot: 'coluna', choices: ['horario'] },
-        { slot: 'início', choices: ["'08:40'"] },
-        { slot: 'fim', choices: ["'08:45'"] }
+        { slot: 'coluna', choices: ['personagem_id', 'local_id', 'horario'] },
+        { slot: 'início', choices: ["'08:35'", "'08:40'", "'08:45'", "'08:58'"] },
+        { slot: 'fim', choices: ["'08:35'", "'08:40'", "'08:45'", "'08:58'"] }
       ]
     },
     blank: `Entre 08:40 e 08:45, só ${blank()} passou pelo Pomar.`,
