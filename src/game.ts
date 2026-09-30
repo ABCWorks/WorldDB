@@ -616,6 +616,7 @@ function mobileBarMarkup(): string {
   const tab = ui.mobileTab;
   let action = '';
   if (tab === 'cena') action = found ? `<button type="button" class="outline-button" data-act="next">${moment.nextLabel}</button>` : '<button type="button" class="outline-button" data-act="mobile-tab" data-tab="banco">Procurar no banco →</button>';
+  else if (tab === 'banco') action = '<button type="button" class="game-button" data-act="mobile-tab" data-tab="consulta">Montar consulta →</button>';
   else if (tab === 'consulta') action = found ? `<button type="button" class="outline-button" data-act="next">${nextLabel()}</button>` : '<button type="button" class="game-button play-run-button" data-act="run">Executar consulta →</button>';
   const tabs: [MobileTab, string][] = [['cena', 'Cena'], ['banco', 'Banco'], ['consulta', 'Consulta']];
   return `<div id="play-mobile-bar" class="play-mobile-bar">${action ? `<div class="play-mobile-action">${action}</div>` : ''}<nav class="play-tabbar" aria-label="Partes do momento">${tabs.map(([id, label], i) => `<button type="button" data-act="mobile-tab" data-tab="${id}" ${tab === id ? 'aria-current="page"' : ''}>${id === 'cena' && found && !ui.sceneSeen && tab !== 'cena' ? '<span class="play-new">nova</span>' : ''}<small>${i + 1}</small>${label}</button>`).join('')}</nav></div>`;
