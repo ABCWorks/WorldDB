@@ -1,6 +1,6 @@
 import { relations, tableGuide, type TableGuide } from './story-data';
 import { createSqlClient, type Cell, type QueryResult } from './sql-client';
-import { createSqlSlot, destroySqlEditors, editorMarkup, escapeHtml, getSqlEditor, insertToken, mountSqlEditor, setEditorStatus } from './sql-ui';
+import { createSqlSlot, destroySqlEditors, editorMarkup, escapeHtml, getSqlEditor, insertToken, mountSqlEditor, setEditorStatus, type SqlAssist } from './sql-ui';
 import './game.css';
 
 type SceneArt = (type: string, label: string) => string;
@@ -14,7 +14,7 @@ type Moment = {
   after: { narration: string; line: Line };
   question: string; task: string; lesson: string; hints: string[];
   starter: string; tokens: string[];
-  guide?: { label: string; choices: string[] };
+  guide?: SqlAssist;
   blank: string; filled: (rows: Cell[][]) => string; journal: (rows: Cell[][]) => string;
   success: string;
   highlight?: { cells: string[]; label: string };
@@ -59,7 +59,13 @@ const moments: Moment[] = [
     hints: ['Comece pela tabela personagens. Procure as colunas id e nome.', 'Uma forma é SELECT id, nome FROM personagens;'],
     starter: `SELECT ${createSqlSlot('coluna 1')}, ${createSqlSlot('coluna 2')}\nFROM personagens;`,
     tokens: ['id', ',', 'nome', 'FROM', ';'],
-    guide: { label: 'Complete os espaços na ordem:', choices: ['id', 'nome'] },
+    guide: {
+      label: 'Escolha um valor para',
+      fields: [
+        { slot: 'coluna 1', choices: ['id', 'nome'] },
+        { slot: 'coluna 2', choices: ['nome', 'id'] }
+      ]
+    },
     blank: `No livro de convidados há ${blank('__')} nomes.`,
     filled: rows => `No livro de convidados há ${clue(rows.length)} nomes.`,
     journal: rows => `Convidados no livro: ${clue(rows.length)}`,
@@ -82,7 +88,13 @@ const moments: Moment[] = [
     hints: ['A tabela visitas guarda personagem_id, local_id e horario.', 'Filtre com WHERE local_id = 1 depois de FROM visitas.'],
     starter: `SELECT personagem_id, horario\nFROM visitas\nWHERE ${createSqlSlot('coluna')} = ${createSqlSlot('valor')};`,
     tokens: ['local_id', '=', '1', 'horario', ';'],
-    guide: { label: 'Complete a condição do Pomar:', choices: ['local_id', '1'] },
+    guide: {
+      label: 'Escolha um valor para',
+      fields: [
+        { slot: 'coluna', choices: ['local_id'] },
+        { slot: 'valor', choices: ['1'] }
+      ]
+    },
     blank: `Depois de Adão, o primeiro a passar pelo Pomar foi ${blank()} às ${blank('__:__')}.`,
     filled: rows => { const row = afterAdam(rows); return `Depois de Adão, o primeiro a passar pelo Pomar foi ${clue(idOf(row))} às ${clue(timeOf(row))}.`; },
     journal: rows => { const row = afterAdam(rows); return `Depois de Adão: ${clue(idOf(row))} às ${clue(timeOf(row))}`; },
@@ -107,7 +119,14 @@ const moments: Moment[] = [
     hints: ['Use visitas e combine local_id = 1 com um intervalo em horario.', "Depois de WHERE local_id = 1, acrescente AND horario BETWEEN '08:40' AND '08:45'."],
     starter: `SELECT personagem_id, horario\nFROM visitas\nWHERE local_id = 1\n  AND ${createSqlSlot('coluna')} BETWEEN ${createSqlSlot('início')} AND ${createSqlSlot('fim')};`,
     tokens: ['horario', 'BETWEEN', "'08:40'", 'AND', "'08:45'"],
-    guide: { label: 'Complete o intervalo de horário:', choices: ['horario', "'08:40'", "'08:45'"] },
+    guide: {
+      label: 'Escolha um valor para',
+      fields: [
+        { slot: 'coluna', choices: ['horario'] },
+        { slot: 'início', choices: ["'08:40'"] },
+        { slot: 'fim', choices: ["'08:45'"] }
+      ]
+    },
     blank: `Entre 08:40 e 08:45, só ${blank()} passou pelo Pomar.`,
     filled: rows => `Entre 08:40 e 08:45, só ${clue(who(idOf(rows[0])))} passou pelo Pomar.`,
     journal: rows => `Entre 08:40 e 08:45: ${clue(who(idOf(rows[0])))}`,

@@ -107,13 +107,18 @@ export function highlightSql(source: string): string {
   return html + escapeHtml(source.slice(position));
 }
 
+export type SqlAssist = {
+  label: string;
+  fields: { slot: string; choices: string[] }[];
+};
+
 type EditorMarkupOptions = {
   id: string;
   label: string;
   status: string;
   statusId?: string;
   tokens: string[];
-  assist?: { label: string; choices: string[] };
+  assist?: SqlAssist;
   describedBy?: string;
   placeholder?: string;
 };
@@ -159,6 +164,16 @@ export class SqlEditor {
       slot.classList.toggle('is-selected', selected);
       slot.setAttribute('aria-pressed', String(selected));
     });
+    const tokens = this.host.closest('.play-editor')?.querySelector<HTMLElement>('.play-tokens.is-guided');
+    if (!tokens) return;
+    const baseLabel = tokens.dataset.baseLabel ?? 'Escolha um valor para';
+    const visibleLabel = `${baseLabel} ${label}:`;
+    tokens.setAttribute('aria-label', visibleLabel);
+    const labelElement = tokens.querySelector<HTMLElement>('.play-tokens-label');
+    if (labelElement) labelElement.textContent = visibleLabel;
+    tokens.querySelectorAll<HTMLButtonElement>('[data-slot-target]').forEach(button => {
+      button.hidden = button.dataset.slotTarget !== label;
+    });
   }
 
   focus(): void {
@@ -176,13 +191,19 @@ const mountedEditors = new WeakMap<HTMLElement, SqlEditor>();
 export function editorMarkup(options: EditorMarkupOptions): string {
   const labelId = `${options.id}-label`;
   const describedBy = [options.describedBy, options.statusId].filter(Boolean).join(' ');
-  const tokens = options.assist?.choices ?? options.tokens;
-  const tokenLabel = options.assist?.label ?? 'Atalhos de SQL';
-  const tokenClass = options.assist ? 'play-tokens is-guided' : 'play-tokens';
+  const firstField = options.assist?.fields[0];
+  const tokenLabel = options.assist && firstField ? `${options.assist.label} ${firstField.slot}:` : 'Blocos SQL para inserir no cursor:';
+  const tokenClass = options.assist ? 'play-tokens is-guided' : 'play-tokens is-shortcuts';
+  const tokenButtons = options.assist
+    ? options.assist.fields.flatMap((field, fieldIndex) => field.choices.map(token => `<button type="button" data-act="token" data-token="${escapeHtml(token)}" data-fill-slot="true" data-slot-target="${escapeHtml(field.slot)}" aria-label="Usar ${escapeHtml(token)} no campo ${escapeHtml(field.slot)}" ${fieldIndex ? 'hidden' : ''}>${escapeHtml(token)}</button>`)).join('')
+    : options.tokens.map(token => `<button type="button" data-act="token" data-token="${escapeHtml(token)}">${escapeHtml(token)}</button>`).join('');
   return `<div class="play-editor">
       <div class="play-editor-bar"><span id="${labelId}" class="play-editor-label">${escapeHtml(options.label)}</span><span ${options.statusId ? `id="${options.statusId}"` : ''} class="play-editor-status" role="status" aria-live="polite">${escapeHtml(options.status)}</span></div>
       <div class="play-editor-body"><div id="${options.id}" class="play-code-editor" data-label-id="${labelId}" data-describedby="${escapeHtml(describedBy)}" data-placeholder="${escapeHtml(options.placeholder ?? 'Escreva sua consulta aqui...')}"></div></div>
-      <div class="${tokenClass}" role="group" aria-label="${escapeHtml(tokenLabel)}">${options.assist ? `<span class="play-tokens-label" aria-hidden="true">${escapeHtml(tokenLabel)}</span>` : ''}${tokens.map(token => `<button type="button" data-act="token" data-token="${escapeHtml(token)}" ${options.assist ? `data-fill-slot="true" aria-label="Preencher espaço com ${escapeHtml(token)}"` : ''}>${escapeHtml(token)}</button>`).join('')}</div>
+      <div class="${tokenClass}" role="group" aria-label="${escapeHtml(tokenLabel)}" ${options.assist ? `data-base-label="${escapeHtml(options.assist.label)}"` : ''}>
+        <span class="play-tokens-label" aria-hidden="true">${escapeHtml(tokenLabel)}</span>
+        <div class="play-token-list">${tokenButtons}</div>
+      </div>
     </div>`;
 }
 
@@ -266,7 +287,8 @@ export function insertToken(button: HTMLElement): void {
   if (button.dataset.fillSlot === 'true') {
     const source = editor.value;
     const slots = findSqlSlots(source);
-    const activeLabel = host?.dataset.activeSlot;
+    const activeLabel = button.dataset.slotTarget ?? host?.dataset.activeSlot;
+    if (activeLabel) editor.selectSlot(activeLabel);
     const slot = slots.find(candidate => candidate.label === activeLabel)
       ?? slots.find(candidate => !candidate.value)
       ?? slots[0];

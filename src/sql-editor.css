@@ -12,12 +12,13 @@
 .play-code-editor .cm-sql-slot.is-filled{border-style:solid;background:#5a5e7d;color:#fff9e9;font-family:'DM Mono',monospace}
 .play-code-editor .cm-sql-slot.is-selected{outline:2px solid #8fcbd4;outline-offset:2px;background:#656a8d}
 .play-code-editor .cm-sql-slot:focus-visible{outline:2px solid #fff9e9;outline-offset:2px}
-.play-tokens{display:none;gap:6px;padding:8px 10px;background:#2b2d3f;overflow-x:auto}
-.play-tokens.is-guided{display:flex;align-items:center;flex-wrap:wrap;padding:10px 12px;border-top:1px solid #484a61;overflow:visible}
-.play-tokens-label{flex:1 0 100%;margin-bottom:2px;color:#cac4bb;font:700 .72rem Nunito,Arial,sans-serif}
+.play-tokens{display:flex;flex-direction:column;gap:6px;padding:10px 12px;background:#2b2d3f;border-top:1px solid #484a61;min-width:0}
+.play-tokens-label{color:#cac4bb;font:700 .72rem Nunito,Arial,sans-serif}
+.play-token-list{display:flex;align-items:center;flex-wrap:wrap;gap:6px;min-width:0}
 .play-tokens button{flex:none;border:1px solid #6f7089;border-radius:6px;padding:5px 9px;background:none;color:#fff9e9;font:500 .75rem 'DM Mono',monospace}
-.play-tokens.is-guided button{background:#42455e;border-color:#898ba6;cursor:pointer}
-.play-tokens.is-guided button:hover,.play-tokens.is-guided button:focus-visible{background:#565a78;border-color:#fff9e9;outline:none}
+.play-tokens button:hover,.play-tokens button:focus-visible{background:#565a78;border-color:#fff9e9;outline:none}
+.play-tokens.is-guided button{background:#42455e;border-color:#898ba6}
+.play-tokens button[hidden]{display:none}
 
 /* Classes emitidas pelo parser Lezer nos exemplos estáticos da aula. */
 .tok-keyword{color:#c8751c;font-weight:700}
@@ -33,6 +34,6 @@
   .play-editor .play-code-editor .cm-line{padding:0 12px 0 6px}
   .play-editor .play-code-editor .cm-lineNumbers .cm-gutterElement{min-width:28px;padding:0 8px 0 4px}
   .play-code-editor .cm-sql-slot{min-width:58px;padding:0 6px;font-size:.63rem}
-  .play-tokens{display:flex}
-  .play-tokens.is-guided{padding:9px 10px}
+  .play-tokens{padding:9px 10px}
+  .play-tokens.is-shortcuts .play-token-list{flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px;scrollbar-width:thin}
 }
