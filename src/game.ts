@@ -1,6 +1,6 @@
 import { relations, tableGuide, type TableGuide } from './story-data';
 import { createSqlClient, type Cell, type QueryResult } from './sql-client';
-import { createSqlSlot, destroySqlEditors, editorMarkup, escapeHtml, getSqlEditor, insertToken, mountSqlEditor, setEditorStatus } from './sql-ui';
+import { createSqlSlot, destroySqlEditors, editorMarkup, escapeHtml, getSqlEditor, insertToken, mountSqlEditor, setEditorStatus, type SqlAssist } from './sql-ui';
 import './game.css';
 
 type SceneArt = (type: string, label: string) => string;
@@ -14,7 +14,7 @@ type Moment = {
   after: { narration: string; line: Line };
   question: string; task: string; lesson: string; hints: string[];
   starter: string; tokens: string[];
-  guide?: { label: string; choices: string[] };
+  guide?: SqlAssist;
   blank: string; filled: (rows: Cell[][]) => string; journal: (rows: Cell[][]) => string;
   success: string;
   highlight?: { cells: string[]; label: string };
@@ -59,7 +59,13 @@ const moments: Moment[] = [
     hints: ['Comece pela tabela personagens. Procure as colunas id e nome.', 'Uma forma é SELECT id, nome FROM personagens;'],
     starter: `SELECT ${createSqlSlot('coluna 1')}, ${createSqlSlot('coluna 2')}\nFROM personagens;`,
     tokens: ['id', ',', 'nome', 'FROM', ';'],
-    guide: { label: 'Complete os espaços na ordem:', choices: ['id', 'nome'] },
+    guide: {
+      label: 'Escolha um valor para',
+      fields: [
+        { slot: 'coluna 1', choices: ['id', 'nome', 'papel', 'apelido'] },
+        { slot: 'coluna 2', choices: ['id', 'nome', 'papel', 'apelido'] }
+      ]
+    },
     blank: `No livro de convidados há ${blank('__')} nomes.`,
     filled: rows => `No livro de convidados há ${clue(rows.length)} nomes.`,
     journal: rows => `Convidados no livro: ${clue(rows.length)}`,
@@ -82,7 +88,13 @@ const moments: Moment[] = [
     hints: ['A tabela visitas guarda personagem_id, local_id e horario.', 'Filtre com WHERE local_id = 1 depois de FROM visitas.'],
     starter: `SELECT personagem_id, horario\nFROM visitas\nWHERE ${createSqlSlot('coluna')} = ${createSqlSlot('valor')};`,
     tokens: ['local_id', '=', '1', 'horario', ';'],
-    guide: { label: 'Complete a condição do Pomar:', choices: ['local_id', '1'] },
+    guide: {
+      label: 'Escolha um valor para',
+      fields: [
+        { slot: 'coluna', choices: ['personagem_id', 'local_id', 'horario'] },
+        { slot: 'valor', choices: ['1', '2', '3'] }
+      ]
+    },
     blank: `Depois de Adão, o primeiro a passar pelo Pomar foi ${blank()} às ${blank('__:__')}.`,
     filled: rows => { const row = afterAdam(rows); return `Depois de Adão, o primeiro a passar pelo Pomar foi ${clue(idOf(row))} às ${clue(timeOf(row))}.`; },
     journal: rows => { const row = afterAdam(rows); return `Depois de Adão: ${clue(idOf(row))} às ${clue(timeOf(row))}`; },
@@ -107,7 +119,14 @@ const moments: Moment[] = [
     hints: ['Use visitas e combine local_id = 1 com um intervalo em horario.', "Depois de WHERE local_id = 1, acrescente AND horario BETWEEN '08:40' AND '08:45'."],
     starter: `SELECT personagem_id, horario\nFROM visitas\nWHERE local_id = 1\n  AND ${createSqlSlot('coluna')} BETWEEN ${createSqlSlot('início')} AND ${createSqlSlot('fim')};`,
     tokens: ['horario', 'BETWEEN', "'08:40'", 'AND', "'08:45'"],
-    guide: { label: 'Complete o intervalo de horário:', choices: ['horario', "'08:40'", "'08:45'"] },
+    guide: {
+      label: 'Escolha um valor para',
+      fields: [
+        { slot: 'coluna', choices: ['personagem_id', 'local_id', 'horario'] },
+        { slot: 'início', choices: ["'08:35'", "'08:40'", "'08:45'", "'08:58'"] },
+        { slot: 'fim', choices: ["'08:35'", "'08:40'", "'08:45'", "'08:58'"] }
+      ]
+    },
     blank: `Entre 08:40 e 08:45, só ${blank()} passou pelo Pomar.`,
     filled: rows => `Entre 08:40 e 08:45, só ${clue(who(idOf(rows[0])))} passou pelo Pomar.`,
     journal: rows => `Entre 08:40 e 08:45: ${clue(who(idOf(rows[0])))}`,
@@ -597,6 +616,7 @@ function mobileBarMarkup(): string {
   const tab = ui.mobileTab;
   let action = '';
   if (tab === 'cena') action = found ? `<button type="button" class="outline-button" data-act="next">${moment.nextLabel}</button>` : '<button type="button" class="outline-button" data-act="mobile-tab" data-tab="banco">Procurar no banco →</button>';
+  else if (tab === 'banco') action = '<button type="button" class="game-button" data-act="mobile-tab" data-tab="consulta">Montar consulta →</button>';
   else if (tab === 'consulta') action = found ? `<button type="button" class="outline-button" data-act="next">${nextLabel()}</button>` : '<button type="button" class="game-button play-run-button" data-act="run">Executar consulta →</button>';
   const tabs: [MobileTab, string][] = [['cena', 'Cena'], ['banco', 'Banco'], ['consulta', 'Consulta']];
   return `<div id="play-mobile-bar" class="play-mobile-bar">${action ? `<div class="play-mobile-action">${action}</div>` : ''}<nav class="play-tabbar" aria-label="Partes do momento">${tabs.map(([id, label], i) => `<button type="button" data-act="mobile-tab" data-tab="${id}" ${tab === id ? 'aria-current="page"' : ''}>${id === 'cena' && found && !ui.sceneSeen && tab !== 'cena' ? '<span class="play-new">nova</span>' : ''}<small>${i + 1}</small>${label}</button>`).join('')}</nav></div>`;
@@ -651,12 +671,16 @@ function mount(): void {
 
 function afterRender(): void {
   const host = root?.querySelector<HTMLElement>('#sql-editor');
-  if (host) mountSqlEditor(host, {
-    value: readDraft() ?? moments[state.phase].starter,
-    guided: !!moments[state.phase].guide,
-    onChange: saveDraft,
-    onRun: () => { void runQuery(); }
-  });
+  if (host) {
+    const moment = moments[state.phase];
+    const guided = !!moment.guide;
+    mountSqlEditor(host, {
+      value: guided ? moment.starter : readDraft() ?? moment.starter,
+      guided,
+      onChange: guided ? undefined : saveDraft,
+      onRun: () => { void runQuery(); }
+    });
+  }
   if (ui.bankTab === 'records') ensureRecords(ui.recordsTable);
 }
 
