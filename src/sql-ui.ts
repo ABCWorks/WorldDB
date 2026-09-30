@@ -171,8 +171,13 @@ export class SqlEditor {
     tokens.setAttribute('aria-label', visibleLabel);
     const labelElement = tokens.querySelector<HTMLElement>('.play-tokens-label');
     if (labelElement) labelElement.textContent = visibleLabel;
+    const currentValue = findSqlSlots(this.value).find(slot => slot.label === label)?.value;
     tokens.querySelectorAll<HTMLButtonElement>('[data-slot-target]').forEach(button => {
-      button.hidden = button.dataset.slotTarget !== label;
+      const belongsToSlot = button.dataset.slotTarget === label;
+      const selected = belongsToSlot && button.dataset.token === currentValue;
+      button.hidden = !belongsToSlot;
+      button.classList.toggle('is-selected', selected);
+      button.setAttribute('aria-pressed', String(selected));
     });
   }
 
@@ -195,7 +200,7 @@ export function editorMarkup(options: EditorMarkupOptions): string {
   const tokenLabel = options.assist && firstField ? `${options.assist.label} ${firstField.slot}:` : 'Blocos SQL para inserir no cursor:';
   const tokenClass = options.assist ? 'play-tokens is-guided' : 'play-tokens is-shortcuts';
   const tokenButtons = options.assist
-    ? options.assist.fields.flatMap((field, fieldIndex) => field.choices.map(token => `<button type="button" data-act="token" data-token="${escapeHtml(token)}" data-fill-slot="true" data-slot-target="${escapeHtml(field.slot)}" aria-label="Usar ${escapeHtml(token)} no campo ${escapeHtml(field.slot)}" ${fieldIndex ? 'hidden' : ''}>${escapeHtml(token)}</button>`)).join('')
+    ? options.assist.fields.flatMap((field, fieldIndex) => field.choices.map(token => `<button type="button" data-act="token" data-token="${escapeHtml(token)}" data-fill-slot="true" data-slot-target="${escapeHtml(field.slot)}" aria-label="Usar ${escapeHtml(token)} no campo ${escapeHtml(field.slot)}" aria-pressed="false" ${fieldIndex ? 'hidden' : ''}>${escapeHtml(token)}</button>`)).join('')
     : options.tokens.map(token => `<button type="button" data-act="token" data-token="${escapeHtml(token)}">${escapeHtml(token)}</button>`).join('');
   return `<div class="play-editor">
       <div class="play-editor-bar"><span id="${labelId}" class="play-editor-label">${escapeHtml(options.label)}</span><span ${options.statusId ? `id="${options.statusId}"` : ''} class="play-editor-status" role="status" aria-live="polite">${escapeHtml(options.status)}</span></div>
