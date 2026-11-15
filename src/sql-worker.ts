@@ -2,7 +2,6 @@ import initSqlJs from 'sql.js';
 import wasmUrl from 'sql.js/dist/sql-wasm.wasm?url';
 import { storySql } from './story-data';
 import { practiceSql } from './lesson-data';
-import { practice2Sql } from './lesson-02-data';
 import { prepareReadOnlyQuery } from './sql-guard';
 
 type QueryMessage = { id: number; sql: string };
@@ -11,7 +10,7 @@ type Result = { columns: string[]; values: (string | number | null)[][] };
 // O nome do worker escolhe a base: a do mistério ou a de treino da documentação, sempre em memória e só leitura.
 const ready = initSqlJs({ locateFile: () => wasmUrl }).then(SQL => {
   const db = new SQL.Database();
-  db.run(self.name === 'practice' ? practiceSql : self.name === 'practice2' ? practice2Sql : storySql);
+  db.run(self.name === 'practice' ? practiceSql : storySql);
   return db;
 });
 

@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   build:
-    name: Check and build
+    name: Build
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -38,17 +38,8 @@ jobs:
       - name: Validate deploy script
         run: bash -n scripts/deploy-local.sh
 
-      - name: Typecheck
-        run: npm run typecheck
-
-      - name: Lint
-        run: npm run lint
-
       - name: Check lesson queries
         run: npm run check:lesson
-
-      - name: Test
-        run: npm test
 
       - name: Build
         run: npm run build

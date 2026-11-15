@@ -4,21 +4,37 @@ import { sql, SQLite } from '@codemirror/lang-sql';
 import { EditorState } from '@codemirror/state';
 import { Decoration, type DecorationSet, drawSelection, EditorView, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers, MatchDecorator, placeholder, ViewPlugin, type ViewUpdate, WidgetType } from '@codemirror/view';
 import { classHighlighter, highlightTree, tags } from '@lezer/highlight';
-import { escapeHtml } from './html';
-import { createSqlSlot, findSqlSlots, resolveSqlSlots, slotPattern, type SqlAssist } from './sql-slots';
 import './sql-editor.css';
-
-export { escapeHtml } from './html';
-export { createSqlSlot, type SqlAssist } from './sql-slots';
 
 // CodeMirror 6 foi escolhido por ser modular, acessível e ter suporte oficial a SQL/SQLite.
 // A mesma configuração é usada no jogo e na documentação para evitar dois comportamentos de edição.
 
+export function escapeHtml(value: unknown): string {
+  return String(value ?? 'NULL').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
+}
+
 const sqlite = sql({ dialect: SQLite });
+const slotPattern = /\/\*__worlddb_slot:([^:]+):([^*]*)__\*\//g;
+
+type SqlSlot = { label: string; value: string; from: number; to: number };
+
+export function createSqlSlot(label: string, value = ''): string {
+  return `/*__worlddb_slot:${encodeURIComponent(label)}:${encodeURIComponent(value)}__*/`;
+}
+
+function findSqlSlots(source: string): SqlSlot[] {
+  return [...source.matchAll(slotPattern)].map(match => ({
+    label: decodeURIComponent(match[1]),
+    value: decodeURIComponent(match[2]),
+    from: match.index,
+    to: match.index + match[0].length
+  }));
+}
+
 class SqlSlotWidget extends WidgetType {
   constructor(readonly label: string, readonly value: string) { super(); }
 
-  override eq(other: SqlSlotWidget): boolean {
+  eq(other: SqlSlotWidget): boolean {
     return other.label === this.label && other.value === this.value;
   }
 
@@ -91,6 +107,11 @@ export function highlightSql(source: string): string {
   return html + escapeHtml(source.slice(position));
 }
 
+export type SqlAssist = {
+  label: string;
+  fields: { slot: string; choices: string[] }[];
+};
+
 type EditorMarkupOptions = {
   id: string;
   label: string;
@@ -129,7 +150,7 @@ export class SqlEditor {
   }
 
   get executableValue(): string {
-    return resolveSqlSlots(this.value);
+    return this.value.replace(slotPattern, (_match, _label: string, value: string) => decodeURIComponent(value));
   }
 
   get remainingSlots(): number {
@@ -160,27 +181,6 @@ export class SqlEditor {
     });
   }
 
-  /** Põe o valor no espaço indicado e passa a seleção para o próximo espaço vazio. */
-  fillSlot(label: string, token: string): boolean {
-    const slot = findSqlSlots(this.value).find(candidate => candidate.label === label);
-    if (!slot) return false;
-    const replacement = createSqlSlot(slot.label, token);
-    this.view.dispatch({
-      changes: { from: slot.from, to: slot.to, insert: replacement },
-      selection: { anchor: slot.from + replacement.length },
-      scrollIntoView: true
-    });
-    const slots = findSqlSlots(this.value);
-    const remaining = slots.filter(candidate => !candidate.value).length;
-    this.selectSlot((slots.find(candidate => !candidate.value) ?? slot).label);
-    setEditorStatus(
-      this,
-      remaining ? `${remaining} ${remaining === 1 ? 'espaço restante' : 'espaços restantes'}` : 'Consulta completa · Ctrl + Enter executa',
-      remaining ? '' : 'is-ok'
-    );
-    return true;
-  }
-
   focus(): void {
     this.view.focus();
   }
@@ -206,111 +206,10 @@ export function editorMarkup(options: EditorMarkupOptions): string {
       <div class="play-editor-bar"><span id="${labelId}" class="play-editor-label">${escapeHtml(options.label)}</span><span ${options.statusId ? `id="${options.statusId}"` : ''} class="play-editor-status" role="status" aria-live="polite">${escapeHtml(options.status)}</span></div>
       <div class="play-editor-body"><div id="${options.id}" class="play-code-editor" data-label-id="${labelId}" data-describedby="${escapeHtml(describedBy)}" data-placeholder="${escapeHtml(options.placeholder ?? 'Escreva sua consulta aqui...')}"></div></div>
       <div class="${tokenClass}" role="group" aria-label="${escapeHtml(tokenLabel)}" ${options.assist ? `data-base-label="${escapeHtml(options.assist.label)}"` : ''}>
-        <div class="play-tokens-head"><span class="play-tokens-label" aria-hidden="true">${escapeHtml(tokenLabel)}</span>${options.assist ? '<span class="play-tokens-hint" aria-hidden="true">clique ou arraste até o espaço</span>' : ''}</div>
+        <span class="play-tokens-label" aria-hidden="true">${escapeHtml(tokenLabel)}</span>
         <div class="play-token-list">${tokenButtons}</div>
       </div>
     </div>`;
-}
-
-// Arrastar um valor até um espaço da máscara. Usa eventos de ponteiro, então funciona com mouse, toque e caneta;
-// o clique continua valendo para teclado e para quem prefere não arrastar.
-function enableTokenDrag(editor: SqlEditor): () => void {
-  const tokens = editor.host.closest('.play-editor')?.querySelector<HTMLElement>('.play-tokens.is-guided');
-  if (!tokens) return () => {};
-  const controller = new AbortController();
-  const { signal } = controller;
-  type Drag = { button: HTMLElement; token: string; pointerId: number; x: number; y: number; ghost?: HTMLElement; over?: HTMLElement };
-  let drag: Drag | undefined;
-  let suppressClick = false;
-
-  const slotElements = () => Array.from(editor.host.querySelectorAll<HTMLElement>('.cm-sql-slot'));
-  // Um espaço aceita o valor quando ele está entre as escolhas daquele campo.
-  const accepts = (slot: HTMLElement, token: string) => Array.from(tokens.querySelectorAll<HTMLElement>('[data-slot-target]'))
-    .some(choice => choice.dataset.slotTarget === slot.dataset.slotLabel && choice.dataset.token === token);
-  // Não precisa acertar em cheio: vale o espaço mais próximo dentro de uma pequena margem.
-  const nearestSlot = (x: number, y: number, token: string) => {
-    let best: HTMLElement | undefined;
-    let bestDistance = 28;
-    for (const slot of slotElements()) {
-      if (!accepts(slot, token)) continue;
-      const box = slot.getBoundingClientRect();
-      const distance = Math.hypot(Math.max(box.left - x, 0, x - box.right), Math.max(box.top - y, 0, y - box.bottom));
-      if (distance < bestDistance) { best = slot; bestDistance = distance; }
-    }
-    return best;
-  };
-
-  const finish = () => {
-    if (!drag) return;
-    drag.ghost?.remove();
-    drag.button.classList.remove('is-dragging');
-    if (drag.button.hasPointerCapture(drag.pointerId)) drag.button.releasePointerCapture(drag.pointerId);
-    editor.host.classList.remove('is-dragging');
-    slotElements().forEach(slot => slot.classList.remove('is-drop-target', 'is-drop-over'));
-    drag = undefined;
-  };
-
-  tokens.addEventListener('pointerdown', event => {
-    const button = (event.target as HTMLElement).closest<HTMLElement>('button[data-fill-slot]');
-    if (!button?.dataset.token || event.button !== 0 || drag) return;
-    drag = { button, token: button.dataset.token, pointerId: event.pointerId, x: event.clientX, y: event.clientY };
-  }, { signal });
-
-  document.addEventListener('pointermove', event => {
-    if (!drag || event.pointerId !== drag.pointerId) return;
-    const current = drag;
-    if (!current.ghost) {
-      if (Math.hypot(event.clientX - current.x, event.clientY - current.y) < 6) return;
-      const ghost = document.createElement('div');
-      ghost.className = 'play-token-ghost';
-      ghost.textContent = current.token;
-      ghost.setAttribute('aria-hidden', 'true');
-      document.body.appendChild(ghost);
-      current.ghost = ghost;
-      current.button.setPointerCapture(current.pointerId);
-      current.button.classList.add('is-dragging');
-      editor.host.classList.add('is-dragging');
-      slotElements().forEach(slot => slot.classList.toggle('is-drop-target', accepts(slot, current.token)));
-    }
-    current.ghost.style.transform = `translate(${event.clientX}px, ${event.clientY}px) translate(-50%, -130%)`;
-    const over = nearestSlot(event.clientX, event.clientY, current.token);
-    if (over !== current.over) {
-      current.over?.classList.remove('is-drop-over');
-      over?.classList.add('is-drop-over');
-      current.over = over;
-    }
-  }, { signal });
-
-  document.addEventListener('pointerup', event => {
-    if (!drag || event.pointerId !== drag.pointerId) return;
-    const { ghost, token } = drag;
-    const label = nearestSlot(event.clientX, event.clientY, token)?.dataset.slotLabel;
-    finish();
-    if (!ghost) return;
-    // O navegador ainda dispara um clique no botão depois de soltar; ele não pode preencher outro espaço.
-    suppressClick = true;
-    window.setTimeout(() => { suppressClick = false; }, 80);
-    if (label) editor.fillSlot(label, token);
-    else setEditorStatus(editor, 'Solte o valor sobre um espaço da consulta');
-  }, { signal });
-
-  document.addEventListener('pointercancel', event => { if (event.pointerId === drag?.pointerId) finish(); }, { signal });
-  document.addEventListener('keydown', event => { if (event.key === 'Escape' && drag?.ghost) finish(); }, { signal });
-  tokens.addEventListener('click', event => {
-    if (!suppressClick) return;
-    suppressClick = false;
-    event.stopPropagation();
-    event.preventDefault();
-  }, { signal, capture: true });
-
-  return () => { finish(); controller.abort(); };
-}
-
-// O cursor começa onde o modelo espera a continuação: no primeiro espaço deixado no fim de uma linha, ou no fim do texto.
-// Assim os botões de atalho funcionam mesmo antes de a pessoa clicar no editor.
-function startingCursor(value: string): number {
-  const gap = /[ \t]+$/m.exec(value);
-  return gap ? gap.index + gap[0].length : value.length;
 }
 
 export function mountSqlEditor(host: HTMLElement, options: MountOptions): SqlEditor {
@@ -321,7 +220,6 @@ export function mountSqlEditor(host: HTMLElement, options: MountOptions): SqlEdi
     parent: host,
     state: EditorState.create({
       doc: options.value,
-      selection: { anchor: options.guided ? 0 : startingCursor(options.value) },
       extensions: [
         lineNumbers(),
         highlightActiveLineGutter(),
@@ -331,8 +229,7 @@ export function mountSqlEditor(host: HTMLElement, options: MountOptions): SqlEdi
         bracketMatching(),
         sqlite,
         sqlSlots,
-        // Na máscara, linhas longas quebram: no celular nenhum espaço fica escondido atrás da rolagem.
-        ...(options.guided ? [EditorState.readOnly.of(true), EditorView.editable.of(false), EditorView.lineWrapping] : []),
+        ...(options.guided ? [EditorState.readOnly.of(true), EditorView.editable.of(false)] : []),
         syntaxHighlighting(sqlHighlightStyle),
         editorTheme,
         placeholder(host.dataset.placeholder ?? 'Escreva sua consulta aqui...'),
@@ -356,14 +253,13 @@ export function mountSqlEditor(host: HTMLElement, options: MountOptions): SqlEdi
       ]
     })
   });
+  let editor: SqlEditor;
   const onSlotClick = (event: MouseEvent) => {
     const slot = (event.target as HTMLElement).closest<HTMLButtonElement>('.cm-sql-slot');
     if (slot?.dataset.slotLabel) editor.selectSlot(slot.dataset.slotLabel);
   };
   host.addEventListener('click', onSlotClick);
-  let stopDrag = () => {};
-  const editor: SqlEditor = new SqlEditor(host, view, !!options.guided, () => { host.removeEventListener('click', onSlotClick); stopDrag(); });
-  if (options.guided) stopDrag = enableTokenDrag(editor);
+  editor = new SqlEditor(host, view, !!options.guided, () => host.removeEventListener('click', onSlotClick));
   mountedEditors.set(host, editor);
   const firstSlot = findSqlSlots(editor.value)[0];
   if (options.guided && firstSlot) editor.selectSlot(firstSlot.label);
@@ -394,15 +290,36 @@ export function insertToken(button: HTMLElement): void {
   if (!editor || !token) return;
   const { from, to } = editor.view.state.selection.main;
   if (button.dataset.fillSlot === 'true') {
-    const slots = findSqlSlots(editor.value);
-    const label = button.dataset.slotTarget ?? host?.dataset.activeSlot ?? slots.find(candidate => !candidate.value)?.label ?? slots[0]?.label;
-    if (!label || !editor.fillSlot(label, token)) setEditorStatus(editor, 'Nenhum campo disponível.');
+    const source = editor.value;
+    const slots = findSqlSlots(source);
+    const activeLabel = button.dataset.slotTarget ?? host?.dataset.activeSlot;
+    if (activeLabel) editor.selectSlot(activeLabel);
+    const slot = slots.find(candidate => candidate.label === activeLabel)
+      ?? slots.find(candidate => !candidate.value)
+      ?? slots[0];
+    if (!slot) {
+      setEditorStatus(editor, 'Nenhum campo disponível.');
+      return;
+    }
+    const replacement = createSqlSlot(slot.label, token);
+    editor.view.dispatch({
+      changes: { from: slot.from, to: slot.to, insert: replacement },
+      selection: { anchor: slot.from + replacement.length },
+      scrollIntoView: true
+    });
+    const updatedSlots = findSqlSlots(editor.value);
+    const remaining = updatedSlots.filter(candidate => !candidate.value).length;
+    const nextSlot = updatedSlots.find(candidate => !candidate.value) ?? updatedSlots.find(candidate => candidate.label === slot.label);
+    if (nextSlot) editor.selectSlot(nextSlot.label);
+    setEditorStatus(
+      editor,
+      remaining ? `${remaining} ${remaining === 1 ? 'espaço restante' : 'espaços restantes'}` : 'Consulta completa · Ctrl + Enter executa',
+      remaining ? '' : 'is-ok'
+    );
     return;
   }
   const before = editor.view.state.sliceDoc(0, from);
-  // Depois de um comentário de ajuda, o trecho vai para a linha de baixo; senão viraria comentário também.
-  const inComment = before.slice(before.lastIndexOf('\n') + 1).includes('--');
-  const glue = inComment ? '\n' : before && !/\s$/.test(before) && token !== ',' && token !== ';' ? ' ' : '';
+  const glue = before && !/\s$/.test(before) && token !== ',' && token !== ';' ? ' ' : '';
   const insert = `${glue}${token}`;
   editor.view.dispatch({
     changes: { from, to, insert },

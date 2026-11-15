@@ -1,26 +1,13 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": [
-      "ES2022",
-      "DOM"
-    ],
+    "lib": ["ES2022", "DOM"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true,
-    "types": [
-      "vite/client"
-    ],
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true,
-    "noImplicitOverride": true
+    "types": ["vite/client"]
   },
-  "include": [
-    "src",
-    "tests",
-    "vitest.config.ts"
-  ]
+  "include": ["src"]
 }

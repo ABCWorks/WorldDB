@@ -1,6 +1,4 @@
 // O prólogo é ficção para o jogo; estes registros não representam fatos históricos.
-export const storyName = 'O caso da fruta desaparecida';
-
 export const storySql = `
   PRAGMA foreign_keys = ON;
   CREATE TABLE personagens (

@@ -4,8 +4,6 @@ Uma aventura ilustrada para aprender SQL. A página inicial abre um mistério fi
 
 ## Iniciar localmente
 
-O projeto usa **npm** (Node 22.6 ou mais novo).
-
 ```bash
 npm install
 npm run dev
@@ -13,53 +11,13 @@ npm run dev
 
 Abra o endereço `Local` exibido pelo Vite no terminal.
 
-## Percursos
-
-- `/`: abertura do jogo, com globo 3D e prévia da primeira história.
-- `/aprender/01`: Documentação 01, primeiras consultas (`SELECT`, colunas, `WHERE`, `ORDER BY`). É para onde leva o botão **Jogar** da página inicial; quem já sabe SQL pode ir direto ao jogo.
-- `/aprender/02`: Documentação 02, filtros e junções (`AND`, `BETWEEN`, `LIMIT`, `JOIN`, apelidos de tabela). Cobre o que o jogo pede da terceira pista em diante.
-- `/jogar`: seis momentos de investigação com `SELECT`, `WHERE`, filtros combinados, `ORDER BY` e `JOIN`. O progresso e a preferência de som ficam apenas no `localStorage` do navegador.
-- `/explorar`: os seis capítulos da linha do tempo, com entidades, relações e fontes.
-- Qualquer outro endereço mostra uma página 404.
-
-As consultas rodam em SQLite via WebAssembly dentro de um Web Worker. Cada sessão usa uma base isolada em memória; apenas consultas de leitura são aceitas (`src/sql-guard.ts` avisa cedo e o `PRAGMA query_only` garante) e consultas demoradas são interrompidas.
-
-## Onde fica cada coisa
-
-| Arquivo | Conteúdo |
-| --- | --- |
-| `src/main.ts` | Rotas, página inicial, linha do tempo e página 404 |
-| `src/globe.ts` | Globo 3D (three.js), carregado só em `/` e `/explorar` |
-| `src/data.ts` | Capítulos históricos da linha do tempo |
-| `src/story-data.ts` | Esquema e os 39 registros fictícios do Jardim, guia de tabelas e relações |
-| `src/story-moments.ts` | Os seis momentos do jogo: textos, máscaras, solução de referência e validação |
-| `src/game.ts` | Tela do jogo: cena, banco, editor, resultado e progresso |
-| `src/lesson.ts`, `src/lesson-data.ts` | Documentação 01 e sua base de treino |
-| `src/lesson-02.ts`, `src/lesson-02-data.ts` | Documentação 02 e sua base de treino |
-| `src/lesson-engine.ts`, `src/lesson-judge.ts` | Motor de aulas (passos, exemplos, exercícios) e correção pelo resultado |
-| `src/sql-ui.ts`, `src/sql-slots.ts` | Editor CodeMirror e os espaços das máscaras guiadas |
-| `src/sql-client.ts`, `src/sql-worker.ts`, `src/sql-guard.ts` | Execução das consultas no Web Worker |
-
-IDs, entidades, relações e consultas da linha do tempo são metáforas criadas para o site; as fontes históricas aparecem no rodapé da exploração.
-
-### Máscaras guiadas
-
-Nos seis momentos do jogo o editor começa como uma máscara: a consulta já vem montada e o jogador escolhe o valor de cada espaço. Do quarto momento em diante há o botão **Escrever sozinho**, que troca a máscara por um editor livre. Uma nova documentação pode ser criada com `createLesson` (`src/lesson-engine.ts`), passando passos, exemplos e exercícios.
-
-## Checagens
+## Conferir a Documentação 01
 
 ```bash
-npm run check
+npm run check:lesson
 ```
 
-Roda tudo o que o CI roda antes do build:
-
-- `npm run typecheck`: TypeScript em modo estrito.
-- `npm run lint`: ESLint.
-- `npm run check:lesson`: roda cada exemplo e cada resposta da Documentação 01 no mesmo sql.js do site e confere o resultado esperado, o isolamento da base de treino e as colunas reais da primeira missão.
-- `npm test`: testes com Vitest. `tests/story.test.ts` garante que o jogo pode ser vencido (a solução de referência de cada momento fecha a pista, as máscaras têm combinação vencedora, o diagrama bate com o esquema real); `tests/lesson-02.test.ts` faz o mesmo para a Documentação 02. `npm run check:story` roda só os testes do jogo.
-
-Ao mudar um registro em `src/story-data.ts`, rode `npm run check:story`: se a história deixar de fechar, o teste aponta o momento.
+Roda cada exemplo e cada resposta da aula no mesmo sql.js do site e confere o resultado esperado, o isolamento da base de treino e as colunas reais da primeira missão. O CI executa essa checagem antes do build.
 
 ## Compilar
 
@@ -70,31 +28,40 @@ npm run preview
 
 ## Editor SQL
 
-O jogo e os exercícios das documentações usam o mesmo editor baseado no **CodeMirror 6**, com o dialeto SQLite. A escolha prioriza suporte mantido a SQL, navegação por teclado e leitor de tela, histórico de desfazer/refazer, seleção e rolagem nativas e integração modular sem carregar recursos de uma IDE completa.
+O jogo e os exercícios da documentação usam o mesmo editor baseado no **CodeMirror 6**, com o dialeto SQLite. A escolha prioriza suporte mantido a SQL, navegação por teclado e leitor de tela, histórico de desfazer/refazer, seleção e rolagem nativas e integração modular sem carregar recursos de uma IDE completa.
 
-Cada parte pesada é baixada só quando é usada. No build de produção, a página inicial carrega cerca de `34 kB` de JavaScript (`12 kB` gzip); o globo (three.js, `545 kB`, `135 kB` gzip) vem em seguida, apenas em `/` e `/explorar`; o editor (`342 kB`, `113 kB` gzip) e o SQLite (`688 kB`) só são baixados no jogo e nas documentações.
+No build de produção medido durante a migração, o CodeMirror ficou em um chunk carregado sob demanda de `334,52 kB` (`110,87 kB` gzip). Jogo e documentação também passaram a ser carregados por rota; com isso, o chunk inicial caiu de `603,85 kB` (`161,02 kB` gzip) para `526,28 kB` (`135,76 kB` gzip), e quem abre apenas a página inicial não baixa o editor. O editor foi verificado no jogo e na documentação em desktop e nas larguras mobile de 320, 375 e 390 px, sem rolagem horizontal da página.
 
-## Deploy automático no Debian
+## Deploy automatico no Debian
 
-O workflow `.github/workflows/deploy.yml` compila e publica o site somente em pushes para `main`. A branch padrão de desenvolvimento é `develop`; integre `develop` em `main` quando quiser publicar. Como o servidor usa um IP privado, o job roda em um GitHub Actions runner self-hosted instalado no próprio Debian.
+O workflow `.github/workflows/deploy.yml` compila e publica o site somente em pushes para `main`. A branch padrao de desenvolvimento e `develop`; integre `develop` em `main` quando quiser publicar. Como o servidor usa um IP privado, o job roda em um GitHub Actions runner self-hosted instalado no proprio Debian.
 
-Preparação única:
+Preparacao unica:
 
-1. No Debian, confirme que `pm2`, `curl` e `ss` estão disponíveis para o usuário que executará o runner. Instale o PM2, se necessário, com `npm install --global pm2`.
-2. No repositório do GitHub, abra **Settings > Actions > Runners > New self-hosted runner**, escolha Linux/x64 e execute no Debian os comandos gerados pelo GitHub como o usuário de deploy.
-3. Instale o runner como serviço seguindo a etapa exibida pelo GitHub, para ele voltar automaticamente após reiniciar o Debian.
-4. Opcionalmente, crie a variável de repositório `WORLDDB_PORT` em **Settings > Secrets and variables > Actions > Variables**. O valor padrão é `4174`.
-5. Para manter o processo PM2 após reinicializações, execute uma vez `pm2 startup`, siga o comando que ele imprimir e depois rode `pm2 save`.
+1. No Debian, confirme que `pm2`, `curl` e `ss` estao disponiveis para o usuario que executara o runner. Instale o PM2, se necessario, com `npm install --global pm2`.
+2. No repositorio do GitHub, abra **Settings > Actions > Runners > New self-hosted runner**, escolha Linux/x64 e execute no Debian os comandos gerados pelo GitHub como o usuario de deploy.
+3. Instale o runner como servico seguindo a etapa exibida pelo GitHub, para ele voltar automaticamente apos reiniciar o Debian.
+4. Opcionalmente, crie a variavel de repositorio `WORLDDB_PORT` em **Settings > Secrets and variables > Actions > Variables**. O valor padrao e `4174`.
+5. Para manter o processo PM2 apos reinicializacoes, execute uma vez `pm2 startup`, siga o comando que ele imprimir e depois rode `pm2 save`.
 
-No Cloudflare Zero Trust, abra o Tunnel que já roda no Debian e adicione um **Public Hostname** com:
+No Cloudflare Zero Trust, abra o Tunnel que ja roda no Debian e adicione um **Public Hostname** com:
 
-- Subdomínio: `worlddb`
-- Domínio: `picoli.dev.br`
+- Subdominio: `worlddb`
+- Dominio: `picoli.dev.br`
 - Tipo: `HTTP`
-- URL do serviço: `localhost:4174`
+- URL do servico: `localhost:4174`
 
-O endereço público será `https://worlddb.picoli.dev.br`. Não é necessário liberar a porta `4174` no roteador ou firewall, pois o `cloudflared` acessa o serviço localmente.
+O endereco publico sera `https://worlddb.picoli.dev.br`. Nao e necessario liberar a porta `4174` no roteador ou firewall, pois o `cloudflared` acessa o servico localmente.
 
-O deploy mantém tudo em `~/projetos/worlddb`: publica em `dist/`, cria backups em `backup/` e usa `temp/` durante a troca. Ele valida `/`, `/jogar`, `/explorar` e `/aprender/01` e restaura a versão anterior se a verificação falhar. Nenhuma senha SSH é necessária no modelo com runner self-hosted.
+O deploy mantem tudo em `~/projetos/worlddb`: publica em `dist/`, cria backups em `backup/` e usa `temp/` durante a troca. Ele valida `/`, `/jogar` e `/explorar` e restaura a versao anterior se a verificacao falhar. Nenhuma senha SSH e necessaria no modelo com runner self-hosted.
 
-> Por segurança, use runner self-hosted apenas quando você controla quem pode alterar ou executar workflows no repositório. O GitHub recomenda cautela especial em repositórios públicos.
+> Por seguranca, use runner self-hosted apenas quando voce controla quem pode alterar ou executar workflows no repositorio. O GitHub recomenda cautela especial em repositorios publicos.
+
+## Percursos
+
+- `/`: abertura do jogo, com globo 3D e prévia da primeira história.
+- `/aprender/01`: Documentação 01, primeiras consultas (`SELECT`, colunas, `WHERE`, `ORDER BY`). É para onde leva o botão **Jogar** da página inicial; quem já sabe SQL pode ir direto ao jogo. Os exemplos e exercícios rodam numa base de treino isolada (`src/lesson-data.ts`), separada do mistério.
+- `/jogar`: seis momentos de investigação com `SELECT`, `WHERE`, filtros combinados, `ORDER BY` e `JOIN`. O progresso e a preferência de som ficam apenas no `localStorage` do navegador.
+- `/explorar`: os seis capítulos da linha do tempo, com entidades, relações e fontes.
+
+As consultas do jogo rodam em SQLite via WebAssembly dentro de um Web Worker. Cada sessão usa uma base isolada em memória; apenas consultas de leitura são aceitas e consultas demoradas são interrompidas. Os 39 registros fictícios e o guia de cinco tabelas da história estão em `src/story-data.ts`; a execução está em `src/sql-worker.ts`. Os capítulos históricos ficam em `src/data.ts`. IDs, entidades, relações e consultas da linha do tempo são metáforas criadas para o site; as fontes históricas aparecem no rodapé da exploração.

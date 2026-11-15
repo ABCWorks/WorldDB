@@ -201,4 +201,3 @@
 @media(prefers-reduced-motion:reduce){
   .lesson-step,.lesson-piece,.lesson-progress-bar span,.lesson-grid th,.lesson-grid td,.lesson-grid-wrap{animation:none!important;transition:none!important}
 }
-.lesson-finale-card .lesson-aside a{color:#ffcf62;text-underline-offset:3px}.lesson-finale-card .lesson-aside code{background:#34364a;color:#fff9e9}.lesson-visual>.lesson-table-tag{margin-top:6px}
