@@ -37,7 +37,7 @@ const pieces = [
   { token: ';', target: 'rows', text: 'O ponto e vírgula fecha o pedido, como o ponto final de uma frase. Pronto: o banco responde.' }
 ];
 
-let saved = readSaved();
+const saved = readSaved();
 let root: HTMLElement | undefined;
 let controller: AbortController | undefined;
 const examples = new Map<ExampleKey, QueryResult | Error>();
@@ -419,7 +419,7 @@ function navMarkup(): string {
     <button type="button" class="outline-button lesson-prev" data-act="prev" ${saved.step === 0 ? 'disabled' : ''}><span aria-hidden="true">←</span><span class="lesson-nav-text"> Voltar</span></button>
     <span class="lesson-count">Passo ${saved.step + 1} de ${steps.length}</span>
     ${last
-      ? '<a class="game-button lesson-next" href="/jogar" data-nav data-act="finish">Entrar no Jardim do Éden <span aria-hidden="true">→</span></a>'
+      ? '<span></span>'
       : `<button type="button" class="game-button lesson-next" data-act="next"><span class="lesson-nav-text">Próximo: </span>${steps[saved.step + 1].title} <span aria-hidden="true">→</span></button>`}
   </div>`;
 }
@@ -435,7 +435,8 @@ function finaleMarkup(): string {
         <li>${code('ORDER BY coluna DESC')} <span>organiza a resposta</span></li>
       </ul>
       <a class="game-button lesson-enter" href="/jogar" data-nav data-act="finish">Entrar no Jardim do Éden <span aria-hidden="true">→</span></a>
-      <p class="lesson-aside">Lá dentro, o botão <b>Consultar guia SQL</b> reabre esta aula em outra aba, sem apagar a sua consulta.</p>
+      <p class="lesson-aside">Lá dentro, o botão <b>Consultar guia SQL</b> reabre a aula em outra aba, sem apagar a sua consulta.</p>
+      <p class="lesson-aside">A partir da terceira pista o Jardim pede mais: a <a href="/aprender/02" data-nav>Documentação 02</a> ensina <code>AND</code>, <code>BETWEEN</code>, <code>LIMIT</code> e <code>JOIN</code>.</p>
     </div>
     <div class="lesson-more">
       <h3>Para continuar aprendendo</h3>
