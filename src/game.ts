@@ -221,9 +221,11 @@ const loadingRecords = new Set<string>();
 let root: HTMLElement | undefined;
 let artFn: SceneArt = () => '';
 let controller: AbortController | undefined;
+let advancing = false;
 
 // Estado da tela: não vai para o localStorage e volta ao padrão a cada momento.
 type LastResult = QueryResult & { found: boolean; message?: string };
+type FeedbackMotion = 'success' | 'error' | 'hint' | '';
 let ui = freshUi();
 function freshUi() {
   return {
@@ -237,7 +239,8 @@ function freshUi() {
     hint: '',
     hintIndex: 0,
     processing: false,
-    justFound: false
+    justFound: false,
+    feedbackMotion: '' as FeedbackMotion
   };
 }
 
@@ -572,7 +575,7 @@ function resultTable(columns: string[] | undefined, rows: Cell[][], found: boole
   const marks = rows.map(mark);
   const notes = marks.some(item => item?.label);
   const head = `<tr><th class="play-n">#</th>${(columns ?? rows[0].map(() => '')).map(column => `<th>${escapeHtml(column)}</th>`).join('')}${notes ? '<th><span class="sr-only">Nota</span></th>' : ''}</tr>`;
-  const body = rows.map((row, i) => `<tr class="${marks[i] ? `is-${marks[i]!.kind}` : ''}"><td class="play-n">${i + 1}</td>${row.map(cell => `<td>${cellMarkup(cell)}</td>`).join('')}${notes ? `<td class="play-row-note">${marks[i]?.label ?? ''}</td>` : ''}</tr>`).join('');
+  const body = rows.map((row, i) => `<tr class="${marks[i] ? `is-${marks[i]!.kind}` : ''}${found && ui.justFound ? ' is-row-enter' : ''}" style="--row-delay:${i * 55 + 120}ms"><td class="play-n">${i + 1}</td>${row.map(cell => `<td>${cellMarkup(cell)}</td>`).join('')}${notes ? `<td class="play-row-note">${marks[i]?.label ?? ''}</td>` : ''}</tr>`).join('');
   return `<div class="play-scroll"><table class="play-table play-result-table"><thead>${head}</thead><tbody>${body}</tbody></table></div>${rows.length === 100 ? '<p class="play-empty">Mostrando as primeiras 100 linhas.</p>' : ''}`;
 }
 
@@ -580,19 +583,28 @@ function nextLabel(): string {
   return state.phase === 5 ? 'Ver a conclusão →' : 'Seguir a pista →';
 }
 
+function successBurstMarkup(): string {
+  const sparks = [
+    [-42, -23], [-12, -43], [25, -36], [44, -5],
+    [32, 31], [0, 43], [-35, 29], [-46, 4]
+  ].map(([x, y], index) => `<i style="--spark-x:${x}px;--spark-y:${y}px;--spark-delay:${index * 35}ms"></i>`).join('');
+  return `<div class="play-success-burst" aria-hidden="true"><span class="play-success-ring"></span><span class="play-success-check">✓</span>${sparks}</div>`;
+}
+
 function resultInner(): string {
   const moment = moments[state.phase];
   const found = state.discoveries[state.phase];
-  const hint = ui.hint ? `<p class="play-feedback is-hint"><b>Dica ${Math.min(ui.hintIndex, moment.hints.length)} de ${moment.hints.length}:</b> ${escapeHtml(ui.hint)}</p>` : '';
-  const success = `<p class="play-feedback is-success"><span aria-hidden="true">✦</span> ${moment.success}</p>`;
+  const motion = ui.feedbackMotion ? ` is-feedback-${ui.feedbackMotion}` : '';
+  const hint = ui.hint ? `<p class="play-feedback is-hint${ui.feedbackMotion === 'hint' ? motion : ''}"><b>Dica ${Math.min(ui.hintIndex, moment.hints.length)} de ${moment.hints.length}:</b> ${escapeHtml(ui.hint)}</p>` : '';
+  const success = `<p class="play-feedback is-success${motion}"><span aria-hidden="true">✦</span> ${moment.success}</p>`;
   let body: string;
   if (ui.processing) body = '<p class="play-feedback is-processing"><span class="play-spinner" aria-hidden="true"></span> Procurando nos registros...</p>';
-  else if (ui.error) body = `<p class="play-feedback is-error">${escapeHtml(ui.error)}</p>`;
-  else if (ui.result) body = `${ui.result.found ? success : `<p class="play-feedback is-hint">${escapeHtml(ui.result.message)}</p>`}${resultTable(ui.result.columns, ui.result.values, ui.result.found)}`;
+  else if (ui.error) body = `<p class="play-feedback is-error${motion}">${escapeHtml(ui.error)}</p>`;
+  else if (ui.result) body = `${ui.result.found ? success : `<p class="play-feedback is-hint${motion}">${escapeHtml(ui.result.message)}</p>`}${resultTable(ui.result.columns, ui.result.values, ui.result.found)}`;
   else if (found) body = `${success}${resultTable(found.columns, found.rows, true)}`;
   else body = '<div class="play-placeholder"><strong>O resultado da sua consulta aparecerá aqui.</strong><span>Uma linha certa preenche a lacuna da história.</span></div>';
   const foot = found ? `<div class="play-result-foot"><span>${found.rows.length} ${found.rows.length === 1 ? 'linha' : 'linhas'} · pista guardada no caderno</span><button type="button" class="outline-button play-next" data-act="next">${nextLabel()}</button></div>` : '';
-  return `<span class="section-eyebrow">Resultado</span>${hint}${body}${foot}`;
+  return `${ui.justFound ? successBurstMarkup() : ''}<span class="section-eyebrow">Resultado</span>${hint}${body}${foot}`;
 }
 
 function queryMarkup(): string {
@@ -626,7 +638,7 @@ function mobileBarMarkup(): string {
 
 function finalMarkup(): string {
   const final = state.discoveries[5];
-  return `<main class="game-main play-final"><section class="final-scene paper-panel"><div class="final-art">${artFn('garden-picnic', 'festa na clareira')}</div><div><span class="chapter-pill"><span class="chapter-dot"></span> MISTÉRIO RESOLVIDO</span><h1>A fruta virou festa!</h1><p class="final-proof">${final ? moments[5].filled(final.rows) : ''}</p><p>${final ? escapeHtml(rowValue(final.rows[0], 'Guardou a fruta para a torta surpresa da festa.')) : ''}</p><p>Adão trouxe a toalha, Pardal decorou a mesa com a fita e Cobra chegou com o chapéu. Faltaram só os guardanapos.</p><div class="fiction-note">✧ História inventada para o jogo, inspirada no relato bíblico — sem data histórica</div><div class="home-actions"><a class="game-button" href="/" data-nav>Voltar ao início</a><a class="outline-button" href="/explorar" data-nav>Explorar a linha do tempo</a></div><button class="text-button" data-act="restart" type="button">Jogar de novo</button></div></section></main>`;
+  return `<main class="game-main play-final"><div class="final-confetti" aria-hidden="true">${Array.from({ length: 18 }, (_, index) => `<i style="--confetti-left:${(index + 1) * 5.2}%;--confetti-delay:${index * 42}ms"></i>`).join('')}</div><section class="final-scene paper-panel"><div class="final-art">${artFn('garden-picnic', 'festa na clareira')}</div><div><span class="chapter-pill"><span class="chapter-dot"></span> MISTÉRIO RESOLVIDO</span><h1>A fruta virou festa!</h1><p class="final-proof">${final ? moments[5].filled(final.rows) : ''}</p><p>${final ? escapeHtml(rowValue(final.rows[0], 'Guardou a fruta para a torta surpresa da festa.')) : ''}</p><p>Adão trouxe a toalha, Pardal decorou a mesa com a fita e Cobra chegou com o chapéu. Faltaram só os guardanapos.</p><div class="fiction-note">✧ História inventada para o jogo, inspirada no relato bíblico — sem data histórica</div><div class="home-actions"><a class="game-button" href="/" data-nav>Voltar ao início</a><a class="outline-button" href="/explorar" data-nav>Explorar a linha do tempo</a></div><button class="text-button" data-act="restart" type="button">Jogar de novo</button></div></section></main>`;
 }
 
 export function gameMarkup(baseArt: SceneArt): string {
@@ -659,6 +671,12 @@ function refresh(...regions: Region[]): void {
     shell.dataset.found = String(!!state.discoveries[state.phase]);
   }
   setBusy(ui.processing);
+}
+
+function refreshResultWithMotion(motion: FeedbackMotion): void {
+  ui.feedbackMotion = motion;
+  refresh('result');
+  ui.feedbackMotion = '';
 }
 
 function mount(): void {
@@ -751,12 +769,12 @@ async function runQuery(): Promise<void> {
   if (editor.remainingSlots) {
     ui.error = `Preencha ${editor.remainingSlots === 1 ? 'o espaço que falta' : `os ${editor.remainingSlots} espaços que faltam`} antes de executar.`;
     setEditorStatus(editor, `${editor.remainingSlots} ${editor.remainingSlots === 1 ? 'espaço restante' : 'espaços restantes'}`);
-    refresh('result');
+    refreshResultWithMotion('error');
     return;
   }
   if (!editor.executableValue.replace(/--[^\n]*/g, '').trim()) {
     ui.error = 'Digite uma consulta antes de executar.';
-    refresh('result');
+    refreshResultWithMotion('error');
     return;
   }
   playSound('click');
@@ -793,15 +811,17 @@ async function runQuery(): Promise<void> {
           ensureRecords('personagens');
         }
       }
+      ui.feedbackMotion = fresh ? 'success' : '';
       refresh('header', 'scene', 'bank', 'mission', 'result', 'mobile');
       ui.justFound = false;
+      ui.feedbackMotion = '';
     } else {
       const moment = moments[phase];
       const message = state.discoveries[phase]
         ? 'Consulta válida. A pista deste momento já está no caderno.'
         : `Consulta válida, mas essa ainda não fecha a pista. ${moment.hints[Math.min(ui.hintIndex++, moment.hints.length - 1)]}`;
       ui.result = { ...result, found: false, message };
-      refresh('result');
+      refreshResultWithMotion('hint');
     }
   } catch (error) {
     if (state.phase !== phase || !editor.isConnected) return;
@@ -809,7 +829,7 @@ async function runQuery(): Promise<void> {
     ui.result = null;
     ui.error = readableError(error instanceof Error ? error.message : 'Erro desconhecido.');
     setEditorStatus(editor, '✕ a consulta não rodou', 'is-error');
-    refresh('result');
+    refreshResultWithMotion('error');
   }
 }
 
@@ -836,6 +856,42 @@ function setMobileTab(tab: MobileTab): void {
   window.scrollTo({ top: 0, behavior: 'instant' });
 }
 
+function completionMarkup(final: boolean): string {
+  const label = final ? 'Mistério resolvido!' : 'Pista guardada!';
+  const detail = final ? 'Você conectou todas as pistas do Jardim.' : `Momento ${state.phase + 1} de ${moments.length} concluído`;
+  return `<div class="play-complete-overlay" role="status" aria-live="assertive">
+    <div class="play-complete-card">
+      <span class="play-complete-check" aria-hidden="true">✓</span>
+      <span class="section-eyebrow">${detail}</span>
+      <strong>${label}</strong>
+    </div>
+    <span class="play-complete-orbit" aria-hidden="true"></span>
+  </div>`;
+}
+
+async function advanceMoment(): Promise<void> {
+  if (!root || advancing || !state.discoveries[state.phase]) return;
+  advancing = true;
+  const activeController = controller;
+  const final = state.phase === 5;
+  playSound(final ? 'finish' : 'click');
+  root.querySelectorAll<HTMLButtonElement>('[data-act="next"]').forEach(button => { button.disabled = true; });
+  if (!reducedMotion.matches) {
+    root.insertAdjacentHTML('beforeend', completionMarkup(final));
+    await new Promise(resolve => window.setTimeout(resolve, final ? 900 : 720));
+  }
+  if (activeController?.signal.aborted) {
+    advancing = false;
+    return;
+  }
+  state.phase++;
+  saveStory();
+  clearDraft();
+  ui = freshUi();
+  advancing = false;
+  mount();
+}
+
 function onClick(event: MouseEvent): void {
   const target = (event.target as HTMLElement).closest<HTMLElement>('[data-act]');
   if (!target) return;
@@ -860,13 +916,7 @@ function onClick(event: MouseEvent): void {
     ui = freshUi();
     mount();
   } else if (act === 'next') {
-    if (!state.discoveries[state.phase]) return;
-    playSound(state.phase === 5 ? 'finish' : 'click');
-    state.phase++;
-    saveStory();
-    clearDraft();
-    ui = freshUi();
-    mount();
+    void advanceMoment();
   } else if (act === 'bank-tab') {
     ui.bankTab = target.dataset.tab as BankTab;
     if (ui.bankTab === 'records') ensureRecords(ui.recordsTable);
@@ -894,7 +944,7 @@ function onClick(event: MouseEvent): void {
     playSound('click');
     const hints = moments[state.phase].hints;
     ui.hint = hints[Math.min(ui.hintIndex++, hints.length - 1)];
-    refresh('result');
+    refreshResultWithMotion('hint');
   } else if (act === 'mobile-tab') setMobileTab(target.dataset.tab as MobileTab);
   else if (act === 'token') insertToken(target);
 }
