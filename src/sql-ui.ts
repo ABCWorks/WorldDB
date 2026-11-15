@@ -4,37 +4,21 @@ import { sql, SQLite } from '@codemirror/lang-sql';
 import { EditorState } from '@codemirror/state';
 import { Decoration, type DecorationSet, drawSelection, EditorView, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers, MatchDecorator, placeholder, ViewPlugin, type ViewUpdate, WidgetType } from '@codemirror/view';
 import { classHighlighter, highlightTree, tags } from '@lezer/highlight';
+import { escapeHtml } from './html';
+import { createSqlSlot, findSqlSlots, resolveSqlSlots, slotPattern, type SqlAssist } from './sql-slots';
 import './sql-editor.css';
+
+export { escapeHtml } from './html';
+export { createSqlSlot, type SqlAssist } from './sql-slots';
 
 // CodeMirror 6 foi escolhido por ser modular, acessível e ter suporte oficial a SQL/SQLite.
 // A mesma configuração é usada no jogo e na documentação para evitar dois comportamentos de edição.
 
-export function escapeHtml(value: unknown): string {
-  return String(value ?? 'NULL').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
-}
-
 const sqlite = sql({ dialect: SQLite });
-const slotPattern = /\/\*__worlddb_slot:([^:]+):([^*]*)__\*\//g;
-
-type SqlSlot = { label: string; value: string; from: number; to: number };
-
-export function createSqlSlot(label: string, value = ''): string {
-  return `/*__worlddb_slot:${encodeURIComponent(label)}:${encodeURIComponent(value)}__*/`;
-}
-
-function findSqlSlots(source: string): SqlSlot[] {
-  return [...source.matchAll(slotPattern)].map(match => ({
-    label: decodeURIComponent(match[1]),
-    value: decodeURIComponent(match[2]),
-    from: match.index,
-    to: match.index + match[0].length
-  }));
-}
-
 class SqlSlotWidget extends WidgetType {
   constructor(readonly label: string, readonly value: string) { super(); }
 
-  eq(other: SqlSlotWidget): boolean {
+  override eq(other: SqlSlotWidget): boolean {
     return other.label === this.label && other.value === this.value;
   }
 
@@ -107,11 +91,6 @@ export function highlightSql(source: string): string {
   return html + escapeHtml(source.slice(position));
 }
 
-export type SqlAssist = {
-  label: string;
-  fields: { slot: string; choices: string[] }[];
-};
-
 type EditorMarkupOptions = {
   id: string;
   label: string;
@@ -150,7 +129,7 @@ export class SqlEditor {
   }
 
   get executableValue(): string {
-    return this.value.replace(slotPattern, (_match, _label: string, value: string) => decodeURIComponent(value));
+    return resolveSqlSlots(this.value);
   }
 
   get remainingSlots(): number {
@@ -212,6 +191,13 @@ export function editorMarkup(options: EditorMarkupOptions): string {
     </div>`;
 }
 
+// O cursor começa onde o modelo espera a continuação: no primeiro espaço deixado no fim de uma linha, ou no fim do texto.
+// Assim os botões de atalho funcionam mesmo antes de a pessoa clicar no editor.
+function startingCursor(value: string): number {
+  const gap = /[ \t]+$/m.exec(value);
+  return gap ? gap.index + gap[0].length : value.length;
+}
+
 export function mountSqlEditor(host: HTMLElement, options: MountOptions): SqlEditor {
   destroySqlEditor(host);
   host.classList.toggle('is-guided', !!options.guided);
@@ -220,6 +206,7 @@ export function mountSqlEditor(host: HTMLElement, options: MountOptions): SqlEdi
     parent: host,
     state: EditorState.create({
       doc: options.value,
+      selection: { anchor: options.guided ? 0 : startingCursor(options.value) },
       extensions: [
         lineNumbers(),
         highlightActiveLineGutter(),
@@ -229,7 +216,8 @@ export function mountSqlEditor(host: HTMLElement, options: MountOptions): SqlEdi
         bracketMatching(),
         sqlite,
         sqlSlots,
-        ...(options.guided ? [EditorState.readOnly.of(true), EditorView.editable.of(false)] : []),
+        // Na máscara, linhas longas quebram: no celular nenhum espaço fica escondido atrás da rolagem.
+        ...(options.guided ? [EditorState.readOnly.of(true), EditorView.editable.of(false), EditorView.lineWrapping] : []),
         syntaxHighlighting(sqlHighlightStyle),
         editorTheme,
         placeholder(host.dataset.placeholder ?? 'Escreva sua consulta aqui...'),
@@ -253,13 +241,12 @@ export function mountSqlEditor(host: HTMLElement, options: MountOptions): SqlEdi
       ]
     })
   });
-  let editor: SqlEditor;
   const onSlotClick = (event: MouseEvent) => {
     const slot = (event.target as HTMLElement).closest<HTMLButtonElement>('.cm-sql-slot');
     if (slot?.dataset.slotLabel) editor.selectSlot(slot.dataset.slotLabel);
   };
   host.addEventListener('click', onSlotClick);
-  editor = new SqlEditor(host, view, !!options.guided, () => host.removeEventListener('click', onSlotClick));
+  const editor: SqlEditor = new SqlEditor(host, view, !!options.guided, () => host.removeEventListener('click', onSlotClick));
   mountedEditors.set(host, editor);
   const firstSlot = findSqlSlots(editor.value)[0];
   if (options.guided && firstSlot) editor.selectSlot(firstSlot.label);
@@ -319,7 +306,9 @@ export function insertToken(button: HTMLElement): void {
     return;
   }
   const before = editor.view.state.sliceDoc(0, from);
-  const glue = before && !/\s$/.test(before) && token !== ',' && token !== ';' ? ' ' : '';
+  // Depois de um comentário de ajuda, o trecho vai para a linha de baixo; senão viraria comentário também.
+  const inComment = before.slice(before.lastIndexOf('\n') + 1).includes('--');
+  const glue = inComment ? '\n' : before && !/\s$/.test(before) && token !== ',' && token !== ';' ? ' ' : '';
   const insert = `${glue}${token}`;
   editor.view.dispatch({
     changes: { from, to, insert },
