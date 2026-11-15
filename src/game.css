@@ -354,3 +354,26 @@
 @media(prefers-reduced-motion:reduce){
   .play-gap.is-revealed,.play-art.is-discovered .story-overlay,.scene-3 .story-overlay path:first-child,.scene-4 .story-overlay path:first-child,.scene-5 .clue-route,.orchard-glow,.orchard-route,.play-spinner,.play-result-table tr.is-clue,.play-result-table tr.is-row-enter,.play-feedback,.play-success-burst *,.play-complete-overlay,.play-complete-card,.play-complete-check,.play-complete-orbit,.final-scene,.final-scene .final-art .scene-art,.final-confetti i{animation:none!important}
 }
+
+/* Bloco de anotações do jogador: um ícone fixo no canto, presente o jogo inteiro. */
+.play-notes-button{position:fixed;right:24px;bottom:24px;z-index:31;width:56px;height:56px;display:grid;place-items:center;padding:0;border:2px solid #34364a;border-radius:50%;background:#ffcf62;color:#34364a;box-shadow:3px 4px 0 #34364a;transition:transform .15s}
+.play-notes-button:hover{transform:translateY(-2px)}
+.play-notes-button:focus-visible{outline:3px solid #5872d0;outline-offset:3px}
+.play-notes-button[aria-expanded="true"]{background:#ffdfaa}
+.play-notes-dot{display:none;position:absolute;top:2px;right:2px;width:13px;height:13px;border-radius:50%;background:#eb835e;border:2px solid #34364a}
+.play-notes-button.has-notes .play-notes-dot{display:block}
+.play-notes{position:fixed;right:24px;bottom:92px;z-index:30;width:min(360px,calc(100vw - 48px));display:flex;flex-direction:column;background:#fff5dc;border:2px solid #34364a;border-radius:16px;box-shadow:4px 5px 0 #34364a;padding:14px 16px;color:#34364a}
+.play-notes[hidden]{display:none}
+.play-notes-text{display:block;width:100%;height:220px;min-height:120px;max-height:55vh;resize:vertical;border:1.5px solid #c99c73;border-radius:10px;padding:10px 12px;background:#fffdf6 repeating-linear-gradient(transparent 0 25px,#eadfc6 25px 26px) 0 10px;color:#34364a;font:500 .92rem/26px 'DM Mono',monospace}
+.play-notes-text:focus-visible{outline:3px solid #5872d0;outline-offset:2px}
+.play-notes-text::placeholder{color:#8a8797}
+.play-notes-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:8px;font-size:.75rem;font-weight:800;color:#77758a}
+.play-notes-foot .text-button{font-size:.8rem}
+.play-notes-foot .text-button:disabled{opacity:.4;cursor:default}
+@media(max-width:760px){
+  .play-notes-button{right:12px;bottom:calc(var(--play-bar-height,150px) + 12px);width:50px;height:50px;box-shadow:2px 3px 0 #34364a}
+  .play-final~.play-notes-button{bottom:16px}
+  .play-notes{top:calc(62px + env(safe-area-inset-top,0px));left:12px;right:12px;bottom:auto;width:auto}
+  .play-notes-text{height:32vh;font-size:1rem}
+}
+@media(prefers-reduced-motion:reduce){.play-notes-button{transition:none}.play-notes-button:hover{transform:none}}

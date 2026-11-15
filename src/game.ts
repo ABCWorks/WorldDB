@@ -440,13 +440,13 @@ function finalMarkup(): string {
 
 export function gameMarkup(baseArt: SceneArt): string {
   artFn = baseArt;
-  if (state.phase === 6) return `${headerMarkup()}${finalMarkup()}`;
+  if (state.phase === 6) return `${headerMarkup()}${finalMarkup()}${notesMarkup()}`;
   const found = !!state.discoveries[state.phase];
   return `<div class="play-shell" data-tab="${ui.mobileTab}" data-found="${found}"><div class="play-top">${headerMarkup()}${mobileGapMarkup()}</div><main class="play">
     ${sceneMarkup()}
     <div class="play-workspace">${bankMarkup()}${queryMarkup()}</div>
     ${mapDialog()}
-  </main>${mobileBarMarkup()}</div>`;
+  </main>${mobileBarMarkup()}${notesMarkup()}</div>`;
 }
 
 type Region = 'header' | 'scene' | 'bank' | 'mission' | 'result' | 'mobile';
@@ -511,6 +511,80 @@ function afterRender(): void {
     });
   }
   if (ui.bankTab === 'records') ensureRecords(ui.recordsTable);
+}
+
+/* ---------- Anotações ---------- */
+
+// Bloco livre do jogador. Fica fora do estado da história: sobrevive à troca de momento e a "Reiniciar história".
+const notesKey = 'worlddb-garden-notes-v1';
+const notesLimit = 4000;
+let notes = readNotes();
+let notesOpen = false;
+let clearTimer = 0;
+
+function readNotes(): string {
+  try { return (localStorage.getItem(notesKey) ?? '').slice(0, notesLimit); } catch { return ''; }
+}
+
+function saveNotes(): void {
+  try {
+    if (notes) localStorage.setItem(notesKey, notes);
+    else localStorage.removeItem(notesKey);
+  } catch { /* As anotações valem só para esta visita. */ }
+}
+
+const notesIcon = '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5h9.5L19 7v13.5H6Z" fill="#fffdf6"/><path d="M15.5 3.5V7H19M9 11h7M9 14.5h7M9 18h4"/><path d="M4 7h3M4 11h3M4 15h3"/></svg>';
+
+function notesMarkup(): string {
+  return `<button type="button" class="play-notes-button ${notes ? 'has-notes' : ''}" data-act="notes" aria-expanded="${notesOpen}" aria-controls="play-notes" aria-label="Anotações" title="Anotações">${notesIcon}<span class="play-notes-dot" aria-hidden="true"></span></button>
+  <aside id="play-notes" class="play-notes" aria-labelledby="notes-title" ${notesOpen ? '' : 'hidden'}>
+    <div class="play-pop-head"><span id="notes-title" class="section-eyebrow">Suas anotações</span><button type="button" class="play-close" data-act="notes">fechar ×</button></div>
+    <textarea id="play-notes-text" class="play-notes-text" maxlength="${notesLimit}" spellcheck="false" placeholder="Anote suspeitos, horários, IDs… o que ajudar na investigação." aria-labelledby="notes-title" aria-describedby="notes-status">${escapeHtml(notes)}</textarea>
+    <div class="play-notes-foot"><span id="notes-status" role="status" aria-live="polite">${notesStatus()}</span><button type="button" class="text-button" data-act="notes-clear" ${notes ? '' : 'disabled'}>Limpar</button></div>
+  </aside>`;
+}
+
+function notesStatus(): string {
+  return notes ? `Guardado neste navegador · ${notes.length} de ${notesLimit}` : 'Fica guardado só neste navegador';
+}
+
+function syncNotes(): void {
+  const status = root?.querySelector('#notes-status');
+  if (status) status.textContent = notesStatus();
+  const clear = root?.querySelector<HTMLButtonElement>('[data-act="notes-clear"]');
+  if (clear) { clear.disabled = !notes; clear.textContent = 'Limpar'; delete clear.dataset.confirm; }
+  root?.querySelectorAll('.play-notes-button').forEach(button => button.classList.toggle('has-notes', !!notes));
+}
+
+function toggleNotes(open = !notesOpen): void {
+  notesOpen = open;
+  const panel = root?.querySelector<HTMLElement>('#play-notes');
+  const trigger = root?.querySelector<HTMLElement>('.play-notes-button');
+  if (!panel) return;
+  panel.hidden = !open;
+  trigger?.setAttribute('aria-expanded', String(open));
+  if (open) {
+    closePopovers();
+    const text = panel.querySelector<HTMLTextAreaElement>('#play-notes-text');
+    text?.focus();
+    text?.setSelectionRange(text.value.length, text.value.length);
+  } else if (panel.contains(document.activeElement)) trigger?.focus();
+}
+
+// Apagar pede um segundo clique, para um toque sem querer não levar as anotações embora.
+function clearNotes(button: HTMLElement): void {
+  window.clearTimeout(clearTimer);
+  if (!button.dataset.confirm) {
+    button.dataset.confirm = 'true';
+    button.textContent = 'Apagar tudo?';
+    clearTimer = window.setTimeout(syncNotes, 3500);
+    return;
+  }
+  notes = '';
+  saveNotes();
+  const text = root?.querySelector<HTMLTextAreaElement>('#play-notes-text');
+  if (text) { text.value = ''; text.focus(); }
+  syncNotes();
 }
 
 /* ---------- Rascunho ---------- */
@@ -647,6 +721,11 @@ function togglePopover(id: 'play-journal' | 'play-menu', open?: boolean): void {
   trigger.setAttribute('aria-expanded', String(next));
 }
 
+// No celular o bloco ocupa o mesmo lugar do caderno e do menu, então abrir um fecha o outro.
+function toggleNotesForPopover(): void {
+  if (notesOpen && mobileLayout.matches) toggleNotes(false);
+}
+
 function closePopovers(): void {
   togglePopover('play-journal', false);
   togglePopover('play-menu', false);
@@ -699,8 +778,11 @@ function onClick(event: MouseEvent): void {
   const target = (event.target as HTMLElement).closest<HTMLElement>('[data-act]');
   if (!target) return;
   const act = target.dataset.act;
+  if (act === 'journal' || act === 'menu') toggleNotesForPopover();
   if (act === 'journal') { togglePopover('play-menu', false); togglePopover('play-journal'); }
   else if (act === 'menu') { togglePopover('play-journal', false); togglePopover('play-menu'); }
+  else if (act === 'notes') toggleNotes();
+  else if (act === 'notes-clear') clearNotes(target);
   else if (act === 'sound') {
     soundEnabled = !soundEnabled;
     saveSound();
@@ -778,11 +860,20 @@ export function bindGame(app: HTMLDivElement, sceneArt: SceneArt): void {
   }, { signal });
   document.addEventListener('keydown', event => {
     if (event.key !== 'Escape') return;
+    if (notesOpen && root?.querySelector('#play-notes')?.contains(document.activeElement)) { toggleNotes(false); return; }
     const open = root?.querySelector<HTMLElement>('.play-popover:not([hidden])');
     if (!open) return;
     closePopovers();
     root?.querySelector<HTMLElement>(`[aria-controls="${open.id}"]`)?.focus();
   }, { signal });
   mobileLayout.addEventListener('change', () => { if (state.phase < 6) refresh('mobile'); }, { signal });
+  app.addEventListener('input', event => {
+    const text = event.target as HTMLTextAreaElement;
+    if (text.id !== 'play-notes-text') return;
+    notes = text.value.slice(0, notesLimit);
+    saveNotes();
+    window.clearTimeout(clearTimer);
+    syncNotes();
+  }, { signal });
   afterRender();
 }
