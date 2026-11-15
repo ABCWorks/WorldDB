@@ -1,16 +1,12 @@
-import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { eras, type Era } from './data';
+import type { Globe } from './globe';
+import { storyName } from './story-data';
 import './style.css';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 let active = 0;
-let globe: THREE.Mesh<THREE.SphereGeometry, THREE.MeshPhongMaterial> | undefined;
-let controls: OrbitControls | undefined;
-let renderer: THREE.WebGLRenderer | undefined;
-let scene: THREE.Scene | undefined;
-let camera: THREE.PerspectiveCamera | undefined;
-let animation = 0;
+let globe: Globe | undefined;
+let globeRequest = 0;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 
 function icon(name: string, size = 54): string {
@@ -67,7 +63,7 @@ function details(era: Era): string {
   <div class="system-log"><span class="log-mark">✦</span><span class="log-label">LOG DO SISTEMA</span><strong>${era.log}</strong></div></section>`;
 }
 
-function header(mode: 'home' | 'explore' | 'learn'): string {
+function header(mode: 'home' | 'explore' | 'learn' | 'none'): string {
   return `<header class="site-header"><a class="brand" href="/" data-nav aria-label="WorldDB, voltar ao início"><span class="brand-mark">${icon('web', 35)}</span><span>World<span class="brand-db">DB</span></span></a><div class="header-note">e se o mundo fosse um software?</div><nav class="site-nav" aria-label="Menu principal"><a class="header-link ${mode === 'home' ? 'nav-active' : ''}" href="/" data-nav>Início</a><a class="header-link ${mode === 'learn' ? 'nav-active' : ''}" href="/aprender/01" data-nav>Aprender</a><a class="header-link" href="/jogar" data-nav>Jogar</a><a class="header-link ${mode === 'explore' ? 'nav-active' : ''}" href="/explorar" data-nav>Explorar</a></nav></header>`;
 }
 
@@ -79,9 +75,7 @@ function renderHome(): void {
   const era = eras[0];
   document.documentElement.style.setProperty('--era', era.accent);
   document.documentElement.style.setProperty('--era-pale', era.pale);
-  app.innerHTML = `${header('home')}<main id="top"><div class="intro-line"><span class="intro-spark">✳</span> Uma aventura para aprender SQL <span class="intro-spark">✳</span></div><section class="hero home-hero" aria-labelledby="home-title">${globeMarkup(era)}<div class="hero-story"><div class="chapter-pill"><span class="chapter-dot"></span> WORLDDB · A PRIMEIRA AVENTURA</div><span class="story-kicker">Um mistério em cada consulta</span><h1 id="home-title">O mundo é um banco de dados.</h1><p class="home-subtitle">Descubra suas histórias com SQL.</p><p class="story-summary">Aprenda a fazer perguntas aos dados enquanto investiga um pequeno mistério no jardim. Nenhuma experiência com programação é necessária.</p><div class="home-actions"><a class="game-button" href="/aprender/01" data-nav>Jogar <span aria-hidden="true">→</span></a><a class="outline-button" href="/explorar" data-nav>Explorar o mundo</a></div></div></section><section class="home-preview paper-panel" aria-labelledby="preview-title"><div class="preview-art">${sceneArt('garden', 'um jardim fictício')}</div><div><span class="section-eyebrow">História 01 · prólogo do jardim</span><h2 id="preview-title">O caso da fruta sumida</h2><p>Uma fruta desapareceu da árvore. Adão, Eva e Cobra têm histórias para contar. Quem passou por ali? O que aconteceu?</p><p>Você vai escrever consultas curtas para encontrar pistas. Cada resposta abre a próxima cena.</p><span class="fiction-note">✧ História inventada para o jogo, inspirada na narrativa bíblica — sem data histórica</span><div><a class="text-link" href="/aprender/01" data-nav>Começar a investigação →</a></div></div></section><section class="home-more"><span class="section-eyebrow">O mundo continua</span><h2>Seis capítulos para explorar</h2><p>A linha do tempo original segue aberta, com entidades, relações, consultas ilustrativas e fontes.</p><a class="outline-button" href="/explorar" data-nav>Ver linha do tempo →</a></section></main>`;
-  app.querySelector<HTMLHeadingElement>('#preview-title')!.textContent = 'O grande sumiço da fruta';
-  app.querySelector<HTMLParagraphElement>('.home-preview p')!.textContent = 'Pouco antes da festa, a fruta desapareceu. Cobra parece suspeita, mas os registros do jardim podem contar outra história.';
+  app.innerHTML = `${header('home')}<main id="top"><div class="intro-line"><span class="intro-spark">✳</span> Uma aventura para aprender SQL <span class="intro-spark">✳</span></div><section class="hero home-hero" aria-labelledby="home-title">${globeMarkup(era)}<div class="hero-story"><div class="chapter-pill"><span class="chapter-dot"></span> WORLDDB · A PRIMEIRA AVENTURA</div><span class="story-kicker">Um mistério em cada consulta</span><h1 id="home-title">O mundo é um banco de dados.</h1><p class="home-subtitle">Descubra suas histórias com SQL.</p><p class="story-summary">Aprenda a fazer perguntas aos dados enquanto investiga um pequeno mistério no jardim. Nenhuma experiência com programação é necessária.</p><div class="home-actions"><a class="game-button" href="/aprender/01" data-nav>Jogar <span aria-hidden="true">→</span></a><a class="outline-button" href="/explorar" data-nav>Explorar o mundo</a></div></div></section><section class="home-preview paper-panel" aria-labelledby="preview-title"><div class="preview-art">${sceneArt('garden', 'um jardim fictício')}</div><div><span class="section-eyebrow">História 01 · prólogo do jardim</span><h2 id="preview-title">${storyName}</h2><p>Pouco antes da festa, a fruta desapareceu. Cobra parece suspeita, mas os registros do jardim podem contar outra história.</p><p>Você vai escrever consultas curtas para encontrar pistas. Cada resposta abre a próxima cena.</p><span class="fiction-note">✧ História inventada para o jogo, inspirada na narrativa bíblica — sem data histórica</span><div><a class="text-link" href="/aprender/01" data-nav>Começar a investigação →</a></div></div></section><section class="home-more"><span class="section-eyebrow">O mundo continua</span><h2>Seis capítulos para explorar</h2><p>A linha do tempo original segue aberta, com entidades, relações, consultas ilustrativas e fontes.</p><a class="outline-button" href="/explorar" data-nav>Ver linha do tempo →</a></section></main>`;
   initGlobe(era);
 }
 
@@ -115,108 +109,82 @@ function selectEra(index: number): void {
   app.querySelector('.time-point.is-active')?.scrollIntoView({ block: 'nearest', inline: 'center', behavior: reducedMotion.matches ? 'instant' : 'smooth' });
 }
 
-function globeTexture(era: Era): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 1024; canvas.height = 512;
-  const ctx = canvas.getContext('2d')!;
-  ctx.fillStyle = era.sea; ctx.fillRect(0, 0, 1024, 512);
-  ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 2;
-  for (let x = 0; x < 1024; x += 64) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 512); ctx.stroke(); }
-  for (let y = 0; y < 512; y += 64) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(1024, y); ctx.stroke(); }
-  const lands = [
-    [[68,105],[115,67],[185,78],[207,121],[259,113],[283,163],[241,214],[204,220],[179,269],[140,230],[115,190],[77,179]],
-    [[232,260],[288,234],[329,268],[342,327],[313,401],[281,451],[246,390],[224,316]],
-    [[423,97],[477,75],[529,91],[548,123],[589,103],[667,111],[742,92],[793,123],[852,118],[898,159],[853,200],[799,210],[758,248],[700,223],[656,256],[612,221],[562,234],[521,201],[471,204],[430,166]],
-    [[481,229],[537,230],[580,277],[566,355],[530,409],[492,380],[468,314]],
-    [[784,326],[836,311],[889,340],[912,390],[869,412],[818,391]]
-  ];
-  ctx.fillStyle = era.land; ctx.strokeStyle = '#ffffff88'; ctx.lineWidth = 5;
-  for (const points of lands) { ctx.beginPath(); ctx.moveTo(points[0][0], points[0][1]); for (let i = 1; i < points.length; i++) ctx.lineTo(points[i][0], points[i][1]); ctx.closePath(); ctx.fill(); ctx.stroke(); }
-  ctx.fillStyle = '#ffffffaa';
-  for (let i = 0; i < 65; i++) { const x = (i * 157 + 47) % 1024; const y = (i * 83 + 31) % 512; ctx.beginPath(); ctx.arc(x, y, i % 4 === 0 ? 3 : 1.5, 0, Math.PI * 2); ctx.fill(); }
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  return texture;
+function globeFallback(host: HTMLElement, era: Era): void {
+  host.innerHTML = `<svg class="globe-fallback" viewBox="0 0 320 320" role="img" aria-label="Ilustração do globo terrestre"><circle cx="160" cy="160" r="142" fill="${era.sea}" stroke="#434354" stroke-width="4"/><path d="M86 62q49-25 68 20t50 31q31 6 25 36-41 4-46 44-28 1-37 44-45-6-49-49-51-20-42-70 21-5 31-56Zm134 172q46-8 49 15-22 35-60 42-13-33 11-57Z" fill="${era.land}" stroke="#fff" stroke-width="4"/><ellipse cx="160" cy="160" rx="72" ry="142" fill="none" stroke="#ffffff88" stroke-width="2"/><path d="M20 160h280" stroke="#ffffff88" stroke-width="2"/></svg>`;
+  host.setAttribute('aria-label', 'Ilustração estática do globo terrestre');
 }
 
+// O three.js só é baixado quando existe um globo na tela.
 function initGlobe(era: Era): void {
-  const host = document.querySelector<HTMLDivElement>('#globe')!;
-  try {
-    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setSize(host.clientWidth, host.clientHeight);
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-    host.appendChild(renderer.domElement);
-    scene = new THREE.Scene();
-    camera = new THREE.PerspectiveCamera(40, host.clientWidth / host.clientHeight, .1, 100);
-    camera.position.z = 5.5;
-    scene.add(new THREE.AmbientLight(0xffffff, 2.1));
-    const light = new THREE.DirectionalLight(0xffffff, 2.5); light.position.set(-2, 3, 5); scene.add(light);
-    globe = new THREE.Mesh(new THREE.SphereGeometry(1.74, 64, 48), new THREE.MeshPhongMaterial({ map: globeTexture(era), shininess: 18, specular: '#8bc5c1' }));
-    globe.rotation.y = -.6;
-    scene.add(globe);
-    controls = new OrbitControls(camera, renderer.domElement);
-    controls.enablePan = false; controls.enableZoom = false; controls.enableDamping = !reducedMotion.matches;
-    controls.autoRotate = !reducedMotion.matches; controls.autoRotateSpeed = .75;
-    const frame = () => { animation = requestAnimationFrame(frame); controls?.update(); renderer?.render(scene!, camera!); };
-    frame();
-  } catch {
-    host.innerHTML = `<svg class="globe-fallback" viewBox="0 0 320 320" role="img" aria-label="Ilustração do globo terrestre"><circle cx="160" cy="160" r="142" fill="${era.sea}" stroke="#434354" stroke-width="4"/><path d="M86 62q49-25 68 20t50 31q31 6 25 36-41 4-46 44-28 1-37 44-45-6-49-49-51-20-42-70 21-5 31-56Zm134 172q46-8 49 15-22 35-60 42-13-33 11-57Z" fill="${era.land}" stroke="#fff" stroke-width="4"/><ellipse cx="160" cy="160" rx="72" ry="142" fill="none" stroke="#ffffff88" stroke-width="2"/><path d="M20 160h280" stroke="#ffffff88" stroke-width="2"/></svg>`;
-    host.setAttribute('aria-label', 'Ilustração estática do globo terrestre');
-  }
+  const request = ++globeRequest;
+  const host = document.querySelector<HTMLDivElement>('#globe');
+  if (!host) return;
+  import('./globe').then(module => {
+    if (request !== globeRequest || !host.isConnected) return;
+    globe = module.createGlobe(host, era, reducedMotion);
+  }).catch(() => {
+    if (request === globeRequest && host.isConnected) globeFallback(host, era);
+  });
 }
 
 function disposeGlobe(): void {
-  cancelAnimationFrame(animation);
-  controls?.dispose();
-  globe?.geometry.dispose(); globe?.material.map?.dispose(); globe?.material.dispose();
-  renderer?.dispose(); renderer?.domElement.remove();
-  globe = undefined; controls = undefined; renderer = undefined; scene = undefined; camera = undefined;
+  globeRequest++;
+  globe?.dispose();
+  globe = undefined;
 }
 
-window.addEventListener('resize', () => {
-  if (!renderer || !camera) return;
-  const host = document.querySelector<HTMLDivElement>('#globe'); if (!host) return;
-  camera.aspect = host.clientWidth / host.clientHeight; camera.updateProjectionMatrix();
-  renderer.setSize(host.clientWidth, host.clientHeight);
-});
 document.addEventListener('keydown', event => {
   if ((event.key === 'ArrowRight' || event.key === 'ArrowLeft') && (document.activeElement?.hasAttribute('data-era') || document.activeElement?.classList.contains('round-nav'))) {
     event.preventDefault(); selectEra(active + (event.key === 'ArrowRight' ? 1 : -1));
   }
 });
-reducedMotion.addEventListener('change', () => { if (controls) { controls.autoRotate = !reducedMotion.matches; controls.enableDamping = !reducedMotion.matches; } });
+
+function renderNotFound(): void {
+  const address = location.pathname.replace(/[^\w\-/.]/g, '').slice(0, 60);
+  app.innerHTML = `${header('none')}<main id="top"><section class="home-more not-found" aria-labelledby="not-found-title"><span class="section-eyebrow">Erro 404 · zero linhas</span><h1 id="not-found-title">Essa página não está no banco.</h1><p>A consulta rodou, mas não encontrou nenhum registro neste endereço.</p><pre><code>SELECT * FROM paginas WHERE endereco = '${address}';</code></pre><div class="home-actions"><a class="game-button" href="/" data-nav>Voltar ao início</a><a class="outline-button" href="/aprender/01" data-nav>Aprender SQL</a></div></section></main>`;
+}
+
+type Page = { title: string; description: string };
 const siteTitle = 'WorldDB — descubra histórias com SQL';
-type GameModule = typeof import('./game');
-type LessonModule = typeof import('./lesson');
-let gameModule: GameModule | undefined;
-let lessonModule: LessonModule | undefined;
+const pages: Record<string, Page> = {
+  '/': { title: siteTitle, description: 'Aprenda SQL em uma aventura ilustrada e explore seis capítulos do mundo como um banco de dados.' },
+  '/aprender/01': { title: 'Documentação 01: Primeiras consultas — WorldDB', description: 'SELECT, colunas, WHERE e ORDER BY em seis passos curtos, com exercícios que rodam no navegador.' },
+  '/aprender/02': { title: 'Documentação 02: Filtros e junções — WorldDB', description: 'AND, BETWEEN, LIMIT e JOIN em cinco passos curtos, com exercícios que rodam no navegador.' },
+  '/jogar': { title: `${storyName} — WorldDB`, description: 'Investigue um mistério no jardim escrevendo consultas SQL. Cada resposta certa revela uma pista.' },
+  '/explorar': { title: 'Linha do tempo — WorldDB', description: 'Seis capítulos da história humana vistos como entidades, relações e consultas.' }
+};
+const notFound: Page = { title: 'Página não encontrada — WorldDB', description: pages['/'].description };
+
+type RouteModule = { dispose: () => void };
+const mounted: RouteModule[] = [];
 let renderRequest = 0;
 
 async function render(): Promise<void> {
   const request = ++renderRequest;
   disposeGlobe();
-  gameModule?.disposeGame();
-  lessonModule?.disposeLesson();
-  document.title = siteTitle;
+  mounted.splice(0).forEach(module => module.dispose());
   if (location.pathname === '/aprender' || location.pathname === '/aprender/') history.replaceState({}, '', '/aprender/01');
-  if (location.pathname === '/aprender/01') {
-    const lesson = lessonModule ?? await import('./lesson');
-    lessonModule = lesson;
+  const path = location.pathname.length > 1 ? location.pathname.replace(/\/$/, '') : '/';
+  const page = pages[path] ?? notFound;
+  document.title = page.title;
+  document.querySelector<HTMLMetaElement>('meta[name="description"]')?.setAttribute('content', page.description);
+  if (path === '/aprender/01' || path === '/aprender/02') {
+    const lesson = path === '/aprender/01' ? await import('./lesson') : await import('./lesson-02');
     if (request !== renderRequest) return;
-    document.title = 'Documentação 01: Primeiras consultas — WorldDB';
     app.innerHTML = `${header('learn')}${lesson.lessonMarkup()}`;
     lesson.bindLesson(app);
-  } else if (location.pathname === '/jogar') {
-    const game = gameModule ?? await import('./game');
-    gameModule = game;
+    mounted.push({ dispose: lesson.disposeLesson });
+  } else if (path === '/jogar') {
+    const game = await import('./game');
     if (request !== renderRequest) return;
     document.documentElement.style.setProperty('--era', eras[0].accent);
     document.documentElement.style.setProperty('--era-pale', eras[0].pale);
     app.innerHTML = game.gameMarkup(sceneArt);
     game.bindGame(app, sceneArt);
-  } else if (location.pathname === '/explorar') renderExplore();
-  else renderHome();
+    mounted.push({ dispose: game.disposeGame });
+  } else if (path === '/explorar') renderExplore();
+  else if (path === '/') renderHome();
+  else renderNotFound();
 }
 
 document.addEventListener('click', event => {
