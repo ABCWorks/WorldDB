@@ -1,14 +1,16 @@
-export type Cell = string | number | null;
-export type QueryResult = { columns: string[]; values: Cell[][] };
+import type { QueryResult } from './sql-types';
+
+export type { Cell, QueryResult } from './sql-types';
 export type SqlClient = { execute: (sql: string) => Promise<QueryResult>; reset: (error: Error) => void };
 type Job = { resolve: (result: QueryResult) => void; reject: (error: Error) => void; timer: number };
 
-// "story" guarda o mistério do Jardim; "practice" é a base de treino da Documentação 01.
+// "story" guarda o mistério do Jardim; "practice" e "practice2" são as bases de treino das Documentações 01 e 02.
 // Cada cliente tem o próprio Web Worker, então consultas de treino nunca tocam os dados da história.
 // O Vite só reconhece o worker com opções literais, por isso há um construtor para cada base.
 const spawn = {
   story: () => new Worker(new URL('./sql-worker.ts', import.meta.url), { type: 'module', name: 'story' }),
-  practice: () => new Worker(new URL('./sql-worker.ts', import.meta.url), { type: 'module', name: 'practice' })
+  practice: () => new Worker(new URL('./sql-worker.ts', import.meta.url), { type: 'module', name: 'practice' }),
+  practice2: () => new Worker(new URL('./sql-worker.ts', import.meta.url), { type: 'module', name: 'practice2' })
 };
 
 export function createSqlClient(database: keyof typeof spawn): SqlClient {
