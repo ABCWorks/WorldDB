@@ -7,7 +7,13 @@
     "dev": "vite --host 0.0.0.0",
     "build": "tsc && vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "check:lesson": "node --experimental-strip-types scripts/check-lesson.mjs"
+    "typecheck": "tsc",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check:lesson": "node --experimental-strip-types scripts/check-lesson.mjs",
+    "check:story": "vitest run tests/story.test.ts",
+    "check": "npm run typecheck && npm run lint && npm run check:lesson && npm test"
   },
   "dependencies": {
     "@codemirror/commands": "^6.11.1",
@@ -17,12 +23,20 @@
     "@codemirror/view": "^6.43.13",
     "@lezer/highlight": "^1.2.4",
     "sql.js": "^1.14.2",
-    "three": "^0.180.0"
+    "three": "^0.187.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/sql.js": "^1.4.11",
-    "@types/three": "^0.180.0",
+    "@types/three": "^0.187.0",
+    "eslint": "^10.15.0",
+    "globals": "^17.14.0",
     "typescript": "^5.9.3",
-    "vite": "^7.1.12"
+    "typescript-eslint": "^8.72.2",
+    "vite": "^7.1.12",
+    "vitest": "^4.1.12"
+  },
+  "engines": {
+    "node": ">=22.6"
   }
 }

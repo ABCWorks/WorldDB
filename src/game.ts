@@ -1,212 +1,14 @@
-import { relations, tableGuide, type TableGuide } from './story-data';
+import { relations, storyName, tableGuide, type TableGuide } from './story-data';
+import { afterAdam, code, idOf, isId, matchingDiscovery, moments, rowValue, timeOf, type Discovery, type Line, type Moment } from './story-moments';
 import { createSqlClient, type Cell, type QueryResult } from './sql-client';
-import { createSqlSlot, destroySqlEditors, editorMarkup, escapeHtml, getSqlEditor, insertToken, mountSqlEditor, setEditorStatus, type SqlAssist } from './sql-ui';
+import { destroySqlEditors, editorMarkup, escapeHtml, getSqlEditor, insertToken, mountSqlEditor, setEditorStatus } from './sql-ui';
 import './game.css';
 
 type SceneArt = (type: string, label: string) => string;
-type Discovery = { rows: Cell[][]; columns?: string[] };
 type SavedStory = { phase: number; discoveries: (Discovery | null)[] };
-type Line = { speaker: string; text: string };
-type Moment = {
-  skill: string; scene: string; title: string;
-  tag: string; revealTag: string;
-  narration: string; lines: Line[];
-  after: { narration: string; line: Line };
-  question: string; task: string; lesson: string; hints: string[];
-  starter: string; tokens: string[];
-  guide?: SqlAssist;
-  blank: string; filled: (rows: Cell[][]) => string; journal: (rows: Cell[][]) => string;
-  success: string;
-  highlight?: { cells: string[]; label: string };
-  dim?: { cells: string[]; note: string };
-  bank: { tables: string[]; start: string; focus: string[]; note: string };
-  nextLabel: string;
-};
 type BankTab = 'diagram' | 'records';
 type MobileTab = 'cena' | 'banco' | 'consulta';
 type Records = { columns: string[]; values: Cell[][]; total: number } | { error: string };
-
-const storyName = 'O caso da fruta desaparecida';
-const isId = (cell: Cell) => /^#\d+$/.test(String(cell));
-const isTime = (cell: Cell) => /^\d\d:\d\d$/.test(String(cell));
-const idOf = (row: Cell[]) => String(row.find(isId) ?? '');
-const timeOf = (row: Cell[]) => String(row.find(isTime) ?? '');
-const blank = (size = '____') => `<span class="play-blank">${size}</span>`;
-const clue = (value: unknown) => `<b class="play-clue">${escapeHtml(value)}</b>`;
-const code = (value: string) => `<code>${value}</code>`;
-const who = (id: string) => `${id} · ${characterName(id)}`;
-
-function afterAdam(rows: Cell[][]): Cell[] {
-  const sorted = [...rows].sort((a, b) => timeOf(a).localeCompare(timeOf(b)));
-  return sorted[sorted.findIndex(row => idOf(row) === '#3') + 1] ?? sorted[0];
-}
-
-const visitsBank = ['personagens', 'locais', 'visitas'];
-
-const moments: Moment[] = [
-  {
-    skill: 'SELECT', scene: 'garden-missing', title: 'O livro de convidados',
-    tag: '08:30 · Portão', revealTag: '✦ Livro aberto',
-    narration: 'Falta pouco para a festa no Jardim. Adão confere a mesa, a cesta e… a fruta dourada não está em lugar nenhum.',
-    lines: [
-      { speaker: 'Adão', text: '“A festa começa logo e a fruta sumiu. Até meu chapéu está nervoso.”' },
-      { speaker: 'Adão', text: '“Antes de desconfiar de alguém, preciso saber quem está no Jardim. O livro de convidados deve ajudar.”' }
-    ],
-    after: { narration: 'O livro se abre página por página: cinco nomes, cada um com um ID que começa com #.', line: { speaker: 'Adão', text: '“Cinco nomes no livro. Agora vamos ver quem andou pelo Pomar.”' } },
-    question: 'Quem está no Jardim hoje?',
-    task: `Mostre ${code('id')} e ${code('nome')} de todos os personagens.`,
-    lesson: 'SELECT escolhe as colunas; FROM indica de qual tabela elas vêm.',
-    hints: ['Comece pela tabela personagens. Procure as colunas id e nome.', 'Uma forma é SELECT id, nome FROM personagens;'],
-    starter: `SELECT ${createSqlSlot('coluna 1')}, ${createSqlSlot('coluna 2')}\nFROM personagens;`,
-    tokens: ['id', ',', 'nome', 'FROM', ';'],
-    guide: {
-      label: 'Escolha um valor para',
-      fields: [
-        { slot: 'coluna 1', choices: ['id', 'nome', 'papel', 'apelido'] },
-        { slot: 'coluna 2', choices: ['id', 'nome', 'papel', 'apelido'] }
-      ]
-    },
-    blank: `No livro de convidados há ${blank('__')} nomes.`,
-    filled: rows => `No livro de convidados há ${clue(rows.length)} nomes.`,
-    journal: rows => `Convidados no livro: ${clue(rows.length)}`,
-    success: 'Pista encontrada! Cinco convidados no livro, cada um com seu ID.',
-    bank: { tables: ['personagens'], start: 'personagens', focus: ['id', 'nome'], note: `Cada linha é um convidado. ${code('id')} e ${code('nome')} já estão aqui.` },
-    nextLabel: 'Ir para o Pomar →'
-  },
-  {
-    skill: 'WHERE', scene: 'garden-trail', title: 'Rastros no Pomar',
-    tag: '08:35 · Pomar', revealTag: '✦ Rastro revelado',
-    narration: 'Adão chega ao Pomar com a cesta da festa. O galho onde a fruta dourada estava pendurada… está vazio.',
-    lines: [
-      { speaker: 'Adão', text: '“Ontem tinha uma fruta aqui. Hoje tem um cabinho e muita saudade.”' },
-      { speaker: 'Adão', text: '“Pegadas! Alguém passou por aqui depois de mim. O livro de visitas do Jardim deve saber quem foi.”' }
-    ],
-    after: { narration: 'As pegadas brilham no caminho. Entre elas, um rastro sinuoso, como se alguém tivesse passado… deslizando.', line: { speaker: 'Adão', text: '“#2 às 08:42, só sete minutos depois de mim! Mas quem é #2? A tabela de personagens deve saber.”' } },
-    question: 'Quem passou pelo Pomar hoje de manhã?',
-    task: `Mostre ${code('personagem_id')} e ${code('horario')} das visitas ao Pomar.`,
-    lesson: 'WHERE guarda só as linhas que atendem à condição. No mapa, o Pomar tem id 1.',
-    hints: ['A tabela visitas guarda personagem_id, local_id e horario.', 'Filtre com WHERE local_id = 1 depois de FROM visitas.'],
-    starter: `SELECT personagem_id, horario\nFROM visitas\nWHERE ${createSqlSlot('coluna')} = ${createSqlSlot('valor')};`,
-    tokens: ['local_id', '=', '1', 'horario', ';'],
-    guide: {
-      label: 'Escolha um valor para',
-      fields: [
-        { slot: 'coluna', choices: ['personagem_id', 'local_id', 'horario'] },
-        { slot: 'valor', choices: ['1', '2', '3'] }
-      ]
-    },
-    blank: `Depois de Adão, o primeiro a passar pelo Pomar foi ${blank()} às ${blank('__:__')}.`,
-    filled: rows => { const row = afterAdam(rows); return `Depois de Adão, o primeiro a passar pelo Pomar foi ${clue(idOf(row))} às ${clue(timeOf(row))}.`; },
-    journal: rows => { const row = afterAdam(rows); return `Depois de Adão: ${clue(idOf(row))} às ${clue(timeOf(row))}`; },
-    success: 'Pista encontrada! 4 passagens pelo Pomar, e uma delas chegou logo depois de Adão.',
-    highlight: { cells: ['#2', '08:42'], label: 'PISTA · logo depois de Adão' },
-    dim: { cells: ['#3'], note: 'o próprio Adão' },
-    bank: { tables: visitsBank, start: 'visitas', focus: ['local_id'], note: `${code('local_id = 1')} aponta para o Pomar em ${code('locais')}.` },
-    nextLabel: 'Descobrir quem é #2 →'
-  },
-  {
-    skill: 'WHERE + AND', scene: 'garden-trail', title: 'Cobra, cedo demais?',
-    tag: '08:40 – 08:45 · Pomar', revealTag: '✦ Horário confirmado',
-    narration: 'O #2 tem nome e chapéu: é a Cobra. Ela chega ao Pomar ajeitando um chapéu verde enorme.',
-    lines: [
-      { speaker: 'Cobra', text: '“Eu estava lá, sim. Mas fui buscar meu chapéu, não sobremesa!”' },
-      { speaker: 'Adão', text: '“Então vamos conferir: quem mais passou pelo Pomar entre 08:40 e 08:45?”' }
-    ],
-    after: { narration: 'Por alguns minutos, Cobra esteve sozinha no Pomar. Suspeito… ou só coincidência?', line: { speaker: 'Cobra', text: '“Passei cedo, mas isso só prova que estive por ali. Continuem investigando.”' } },
-    question: 'Quem esteve no Pomar entre 08:40 e 08:45?',
-    task: `Encontre ${code('personagem_id')} e ${code('horario')} de quem passou pelo Pomar entre 08:40 e 08:45.`,
-    lesson: 'AND combina condições. BETWEEN inclui os dois horários nas pontas.',
-    hints: ['Use visitas e combine local_id = 1 com um intervalo em horario.', "Depois de WHERE local_id = 1, acrescente AND horario BETWEEN '08:40' AND '08:45'."],
-    starter: `SELECT personagem_id, horario\nFROM visitas\nWHERE local_id = 1\n  AND ${createSqlSlot('coluna')} BETWEEN ${createSqlSlot('início')} AND ${createSqlSlot('fim')};`,
-    tokens: ['horario', 'BETWEEN', "'08:40'", 'AND', "'08:45'"],
-    guide: {
-      label: 'Escolha um valor para',
-      fields: [
-        { slot: 'coluna', choices: ['personagem_id', 'local_id', 'horario'] },
-        { slot: 'início', choices: ["'08:35'", "'08:40'", "'08:45'", "'08:58'"] },
-        { slot: 'fim', choices: ["'08:35'", "'08:40'", "'08:45'", "'08:58'"] }
-      ]
-    },
-    blank: `Entre 08:40 e 08:45, só ${blank()} passou pelo Pomar.`,
-    filled: rows => `Entre 08:40 e 08:45, só ${clue(who(idOf(rows[0])))} passou pelo Pomar.`,
-    journal: rows => `Entre 08:40 e 08:45: ${clue(who(idOf(rows[0])))}`,
-    success: 'Pista encontrada! Só uma passagem nesse intervalo.',
-    highlight: { cells: ['#2'], label: 'PISTA · sozinha no Pomar' },
-    bank: { tables: visitsBank, start: 'visitas', focus: ['local_id', 'horario'], note: `${code('horario')} é texto no formato HH:MM, então BETWEEN compara na ordem certa.` },
-    nextLabel: 'Quem foi o último? →'
-  },
-  {
-    skill: 'ORDER BY', scene: 'garden-trail', title: 'O último rastro',
-    tag: 'Fim da manhã · Pomar', revealTag: '✦ Último rastro',
-    narration: 'Um farfalhar no alto: Pardal pousa num galho baixo, meio ofegante.',
-    lines: [{ speaker: 'Pardal', text: '“Piu! Fui o último por ali? Isso parece ruim fora de contexto.”' }],
-    after: { narration: 'Pardal abre as asas. Presa nas penas, uma pontinha de algo azul.', line: { speaker: 'Pardal', text: '“Fui o último a passar. Eu levava uma coisa azul. Podemos conferir?”' } },
-    question: 'Quem foi o último a passar pelo Pomar?',
-    task: `Mostre ${code('personagem_id')} e ${code('horario')} da visita mais recente ao Pomar.`,
-    lesson: 'ORDER BY horario DESC põe o mais recente primeiro; LIMIT 1 mostra só uma linha.',
-    hints: ['Filtre as visitas pelo Pomar antes de ordenar.', 'Use WHERE local_id = 1 ORDER BY horario DESC LIMIT 1.'],
-    starter: 'SELECT personagem_id, horario\nFROM visitas\nWHERE local_id = 1\n-- ordene do mais recente e fique com uma linha',
-    tokens: ['ORDER BY', 'horario', 'DESC', 'LIMIT', '1'],
-    blank: `O último rastro no Pomar é de ${blank()} às ${blank('__:__')}.`,
-    filled: rows => `O último rastro no Pomar é de ${clue(who(idOf(rows[0])))} às ${clue(timeOf(rows[0]))}.`,
-    journal: rows => `Último rastro: ${clue(who(idOf(rows[0])))} às ${clue(timeOf(rows[0]))}`,
-    success: 'Pista encontrada! O rastro mais recente do Pomar.',
-    highlight: { cells: ['#5'], label: 'PISTA · o último' },
-    bank: { tables: visitsBank, start: 'visitas', focus: ['horario'], note: `${code('DESC')} inverte a ordem: o horário mais tarde fica no topo.` },
-    nextLabel: 'Conferir o que Pardal levou →'
-  },
-  {
-    skill: 'JOIN', scene: 'garden-missing', title: 'Penas, fita e suspeitas',
-    tag: '09:05 · Pomar', revealTag: '✦ Objeto identificado',
-    narration: 'No livro de movimentações, cada objeto aparece só como um número. Para saber o que Pardal levou, é preciso traduzir.',
-    lines: [{ speaker: 'Pardal', text: '“Todo mundo olha para minhas asas. Era decoração, piu.”' }],
-    after: { narration: 'Era só enfeite: a fita azul foi parar na mesa da festa. Mas e a fruta?', line: { speaker: 'Pardal', text: '“Era uma fita azul. Isso explica meu voo, mas ainda precisamos seguir a fruta.”' } },
-    question: 'O que Pardal levou às 09:05?',
-    task: `Junte ${code('movimentacoes')} a ${code('objetos')} e mostre ${code('nome')} e ${code('horario')} do que #5 levou às 09:05.`,
-    lesson: 'JOIN liga movimentacoes.objeto_id a objetos.id. Assim um número vira o nome do objeto.',
-    hints: ["Selecione objetos.nome e movimentacoes.horario. Filtre personagem_id = '#5' e horario = '09:05'.", 'Ligue com JOIN objetos ON movimentacoes.objeto_id = objetos.id.'],
-    starter: 'SELECT objetos.nome, movimentacoes.horario\nFROM movimentacoes\nJOIN objetos ON \n-- que colunas ligam as duas tabelas?',
-    tokens: ['movimentacoes.objeto_id', '=', 'objetos.id', 'WHERE', "'#5'", 'AND', "'09:05'"],
-    blank: `Às 09:05, Pardal carregou ${blank('______')}.`,
-    filled: rows => `Às 09:05, Pardal carregou ${clue(rowValue(rows[0], 'fita azul'))}.`,
-    journal: rows => `Pardal carregou: ${clue(rowValue(rows[0], 'fita azul'))}`,
-    success: 'Pista encontrada! O número virou nome de objeto.',
-    highlight: { cells: ['fita azul'], label: 'PISTA' },
-    bank: { tables: ['personagens', 'objetos', 'movimentacoes'], start: 'movimentacoes', focus: ['objeto_id'], note: `${code('objeto_id')} = ${code('objetos.id')} traduz o número em nome.` },
-    nextLabel: 'Seguir a fruta →'
-  },
-  {
-    skill: 'JOIN + pistas', scene: 'garden-missing', title: 'O caminho da fruta',
-    tag: 'Hora de fechar o caso', revealTag: '✦ Caso resolvido',
-    narration: 'Todas as pistas levam ao livro de movimentações. Só falta ler a linha certa, com nomes em vez de números.',
-    lines: [{ speaker: 'Adão', text: '“Se acharmos quem moveu a fruta, para onde e por quê, o caso fecha.”' }],
-    after: { narration: 'Na Clareira, a toalha xadrez já cobre a mesa. Ao lado da cesta, um cheirinho de torta.', line: { speaker: 'Adão', text: '“Então era uma surpresa para a festa! Corram: ainda dá tempo de pôr a mesa.”' } },
-    question: 'Quem levou a fruta dourada, e para onde?',
-    task: `Cruze ${code('movimentacoes')}, ${code('personagens')}, ${code('objetos')} e ${code('locais')}. Mostre nome da pessoa, objeto, destino, ${code('horario')} e ${code('observacao')} da fruta dourada.`,
-    lesson: 'Cada JOIN traduz um ID: personagem_id → personagens.id, objeto_id → objetos.id, destino_id → locais.id.',
-    hints: ['Comece em movimentacoes. Junte personagens, objetos e locais usando os pares de IDs do mapa.', "Selecione p.nome, o.nome, l.nome, m.horario, m.observacao; filtre WHERE o.nome = 'fruta dourada'."],
-    starter: 'SELECT p.nome, o.nome, l.nome, m.horario, m.observacao\nFROM movimentacoes m\n-- três JOINs: personagens p, objetos o, locais l',
-    tokens: ['JOIN', 'ON', 'm.personagem_id = p.id', 'm.objeto_id = o.id', 'm.destino_id = l.id', 'WHERE', "'fruta dourada'"],
-    blank: `Às ${blank('__:__')}, ${blank()} levou a fruta para ${blank('______')}.`,
-    filled: rows => `Às ${clue(rowValue(rows[0], '08:57'))}, ${clue(rowValue(rows[0], 'Eva'))} levou a ${clue(rowValue(rows[0], 'fruta dourada'))} para a ${clue(rowValue(rows[0], 'Clareira'))}.`,
-    journal: rows => `A fruta: ${clue(rowValue(rows[0], 'Eva'))} → ${clue(rowValue(rows[0], 'Clareira'))} às ${clue(rowValue(rows[0], '08:57'))}`,
-    success: 'Caso resolvido! Os IDs viraram uma história inteira.',
-    highlight: { cells: ['Eva'], label: 'PISTA · caso resolvido' },
-    bank: { tables: ['personagens', 'objetos', 'locais', 'movimentacoes'], start: 'movimentacoes', focus: ['personagem_id', 'objeto_id', 'destino_id'], note: 'Cada JOIN traduz um ID em nome. Três chaves, três JOINs.' },
-    nextLabel: 'Ver a conclusão →'
-  }
-];
-
-// A validação olha as células de cada linha, aceitando aliases, colunas extras e outra ordem.
-const expectedRows: string[][][] = [
-  [['#1', 'Deus'], ['#2', 'Cobra'], ['#3', 'Adão'], ['#4', 'Eva'], ['#5', 'Pardal']],
-  [['#3', '08:35'], ['#2', '08:42'], ['#4', '08:56'], ['#5', '08:58']],
-  [['#2', '08:42']],
-  [['#5', '08:58']],
-  [['fita azul', '09:05']],
-  [['Eva', 'fruta dourada', 'Clareira', '08:57', 'Guardou a fruta para a torta surpresa da festa.']]
-];
-
 const storyKey = 'worlddb-garden-story-v2';
 const soundKey = 'worlddb-sound-v1';
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -221,9 +23,11 @@ const loadingRecords = new Set<string>();
 let root: HTMLElement | undefined;
 let artFn: SceneArt = () => '';
 let controller: AbortController | undefined;
+let advancing = false;
 
 // Estado da tela: não vai para o localStorage e volta ao padrão a cada momento.
 type LastResult = QueryResult & { found: boolean; message?: string };
+type FeedbackMotion = 'success' | 'error' | 'hint' | '';
 let ui = freshUi();
 function freshUi() {
   return {
@@ -237,7 +41,9 @@ function freshUi() {
     hint: '',
     hintIndex: 0,
     processing: false,
-    justFound: false
+    justFound: false,
+    freeMode: false,
+    feedbackMotion: '' as FeedbackMotion
   };
 }
 
@@ -286,16 +92,6 @@ function playSound(kind: 'click' | 'clue' | 'finish'): void {
       oscillator.stop(start + .12);
     });
   } catch { /* Áudio pode estar indisponível sem afetar o jogo. */ }
-}
-
-function rowValue(row: Cell[], wanted: string): string {
-  return String(row.find(cell => String(cell) === wanted) ?? '');
-}
-
-function characterName(id: string): string {
-  const row = state.discoveries[0]?.rows.find(candidate => candidate.some(cell => String(cell) === id));
-  const name = row?.find(cell => expectedRows[0].some(([_id, expectedName]) => expectedName === String(cell)));
-  return name ? String(name) : '?';
 }
 
 /* ---------- Ilustração ---------- */
@@ -379,7 +175,8 @@ function headerMarkup(): string {
         <div id="play-menu" class="play-popover play-menu" hidden>
           <a href="/" data-nav>Início</a>
           <a href="/explorar" data-nav>Explorar a linha do tempo</a>
-          ${guideLink('')}
+          ${guideLink('', 1)}
+          ${guideLink('', 2)}
           <button type="button" class="play-sound play-narrow-block" data-act="sound" aria-pressed="${soundEnabled}">${soundLabel()}</button>
           <button type="button" data-act="restart">Reiniciar história</button>
           <p>✧ História inventada para o jogo, inspirada no relato bíblico. Não é um acontecimento histórico datado.</p>
@@ -572,7 +369,7 @@ function resultTable(columns: string[] | undefined, rows: Cell[][], found: boole
   const marks = rows.map(mark);
   const notes = marks.some(item => item?.label);
   const head = `<tr><th class="play-n">#</th>${(columns ?? rows[0].map(() => '')).map(column => `<th>${escapeHtml(column)}</th>`).join('')}${notes ? '<th><span class="sr-only">Nota</span></th>' : ''}</tr>`;
-  const body = rows.map((row, i) => `<tr class="${marks[i] ? `is-${marks[i]!.kind}` : ''}"><td class="play-n">${i + 1}</td>${row.map(cell => `<td>${cellMarkup(cell)}</td>`).join('')}${notes ? `<td class="play-row-note">${marks[i]?.label ?? ''}</td>` : ''}</tr>`).join('');
+  const body = rows.map((row, i) => `<tr class="${marks[i] ? `is-${marks[i]!.kind}` : ''}${found && ui.justFound ? ' is-row-enter' : ''}" style="--row-delay:${i * 55 + 120}ms"><td class="play-n">${i + 1}</td>${row.map(cell => `<td>${cellMarkup(cell)}</td>`).join('')}${notes ? `<td class="play-row-note">${marks[i]?.label ?? ''}</td>` : ''}</tr>`).join('');
   return `<div class="play-scroll"><table class="play-table play-result-table"><thead>${head}</thead><tbody>${body}</tbody></table></div>${rows.length === 100 ? '<p class="play-empty">Mostrando as primeiras 100 linhas.</p>' : ''}`;
 }
 
@@ -580,34 +377,46 @@ function nextLabel(): string {
   return state.phase === 5 ? 'Ver a conclusão →' : 'Seguir a pista →';
 }
 
+function successBurstMarkup(): string {
+  const sparks = [
+    [-42, -23], [-12, -43], [25, -36], [44, -5],
+    [32, 31], [0, 43], [-35, 29], [-46, 4]
+  ].map(([x, y], index) => `<i style="--spark-x:${x}px;--spark-y:${y}px;--spark-delay:${index * 35}ms"></i>`).join('');
+  return `<div class="play-success-burst" aria-hidden="true"><span class="play-success-ring"></span><span class="play-success-check">✓</span>${sparks}</div>`;
+}
+
 function resultInner(): string {
   const moment = moments[state.phase];
   const found = state.discoveries[state.phase];
-  const hint = ui.hint ? `<p class="play-feedback is-hint"><b>Dica ${Math.min(ui.hintIndex, moment.hints.length)} de ${moment.hints.length}:</b> ${escapeHtml(ui.hint)}</p>` : '';
-  const success = `<p class="play-feedback is-success"><span aria-hidden="true">✦</span> ${moment.success}</p>`;
+  const motion = ui.feedbackMotion ? ` is-feedback-${ui.feedbackMotion}` : '';
+  const hint = ui.hint ? `<p class="play-feedback is-hint${ui.feedbackMotion === 'hint' ? motion : ''}"><b>Dica ${Math.min(ui.hintIndex, moment.hints.length)} de ${moment.hints.length}:</b> ${escapeHtml(ui.hint)}</p>` : '';
+  const success = `<p class="play-feedback is-success${motion}"><span aria-hidden="true">✦</span> ${moment.success}</p>`;
   let body: string;
   if (ui.processing) body = '<p class="play-feedback is-processing"><span class="play-spinner" aria-hidden="true"></span> Procurando nos registros...</p>';
-  else if (ui.error) body = `<p class="play-feedback is-error">${escapeHtml(ui.error)}</p>`;
-  else if (ui.result) body = `${ui.result.found ? success : `<p class="play-feedback is-hint">${escapeHtml(ui.result.message)}</p>`}${resultTable(ui.result.columns, ui.result.values, ui.result.found)}`;
+  else if (ui.error) body = `<p class="play-feedback is-error${motion}">${escapeHtml(ui.error)}</p>`;
+  else if (ui.result) body = `${ui.result.found ? success : `<p class="play-feedback is-hint${motion}">${escapeHtml(ui.result.message)}</p>`}${resultTable(ui.result.columns, ui.result.values, ui.result.found)}`;
   else if (found) body = `${success}${resultTable(found.columns, found.rows, true)}`;
   else body = '<div class="play-placeholder"><strong>O resultado da sua consulta aparecerá aqui.</strong><span>Uma linha certa preenche a lacuna da história.</span></div>';
   const foot = found ? `<div class="play-result-foot"><span>${found.rows.length} ${found.rows.length === 1 ? 'linha' : 'linhas'} · pista guardada no caderno</span><button type="button" class="outline-button play-next" data-act="next">${nextLabel()}</button></div>` : '';
-  return `<span class="section-eyebrow">Resultado</span>${hint}${body}${foot}`;
+  return `${ui.justFound ? successBurstMarkup() : ''}<span class="section-eyebrow">Resultado</span>${hint}${body}${foot}`;
 }
 
 function queryMarkup(): string {
   const moment = moments[state.phase];
-  return `<section class="play-query" data-pane="consulta" aria-label="Consulta">
+  const guided = isGuided(moment);
+  const modeButton = moment.guide && moment.free ? `<button type="button" class="text-button play-mode" data-act="free-mode" aria-pressed="${ui.freeMode}">${ui.freeMode ? 'Voltar à máscara' : 'Escrever sozinho'}</button>` : '';
+  return `<section id="play-query" class="play-query" data-pane="consulta" aria-label="Consulta">
     ${missionMarkup()}
-    ${editorMarkup({ id: 'sql-editor', label: 'consulta.sql', status: moment.guide ? 'Preencha os espaços' : 'Ctrl + Enter executa', statusId: 'editor-status', tokens: moment.tokens, assist: moment.guide, describedBy: 'play-task' })}
-    <div class="play-run"><button type="button" class="game-button play-run-button" data-act="run">Executar consulta →</button><button type="button" class="text-button" data-act="hint">Preciso de uma dica</button>${guideLink('text-button play-guide')}</div>
+    ${editorMarkup({ id: 'sql-editor', label: 'consulta.sql', status: guided ? 'Preencha os espaços' : 'Ctrl + Enter executa', statusId: 'editor-status', tokens: moment.tokens, assist: guided ? moment.guide : undefined, describedBy: 'play-task' })}
+    <div class="play-run"><button type="button" class="game-button play-run-button" data-act="run">Executar consulta →</button><button type="button" class="text-button" data-act="hint">Preciso de uma dica</button>${modeButton}${guideLink('text-button play-guide')}</div>
     <div id="play-result" class="play-result" role="status" aria-live="polite">${resultInner()}</div>
   </section>`;
 }
 
 // Abre em outra aba para não perder a consulta que está no editor.
-function guideLink(className: string): string {
-  return `<a class="${className}" href="/aprender/01" target="_blank" rel="noopener">Consultar guia SQL <span aria-hidden="true">↗</span><span class="sr-only"> (abre em outra aba)</span></a>`;
+// Os dois primeiros momentos usam o que a Documentação 01 ensina; do terceiro em diante, a 02.
+function guideLink(className: string, lesson = state.phase >= 2 ? 2 : 1): string {
+  return `<a class="${className}" href="/aprender/0${lesson}" target="_blank" rel="noopener">${className ? 'Consultar guia SQL' : `Guia SQL 0${lesson}`} <span aria-hidden="true">↗</span><span class="sr-only"> (abre em outra aba)</span></a>`;
 }
 
 function mobileBarMarkup(): string {
@@ -626,18 +435,18 @@ function mobileBarMarkup(): string {
 
 function finalMarkup(): string {
   const final = state.discoveries[5];
-  return `<main class="game-main play-final"><section class="final-scene paper-panel"><div class="final-art">${artFn('garden-picnic', 'festa na clareira')}</div><div><span class="chapter-pill"><span class="chapter-dot"></span> MISTÉRIO RESOLVIDO</span><h1>A fruta virou festa!</h1><p class="final-proof">${final ? moments[5].filled(final.rows) : ''}</p><p>${final ? escapeHtml(rowValue(final.rows[0], 'Guardou a fruta para a torta surpresa da festa.')) : ''}</p><p>Adão trouxe a toalha, Pardal decorou a mesa com a fita e Cobra chegou com o chapéu. Faltaram só os guardanapos.</p><div class="fiction-note">✧ História inventada para o jogo, inspirada no relato bíblico — sem data histórica</div><div class="home-actions"><a class="game-button" href="/" data-nav>Voltar ao início</a><a class="outline-button" href="/explorar" data-nav>Explorar a linha do tempo</a></div><button class="text-button" data-act="restart" type="button">Jogar de novo</button></div></section></main>`;
+  return `<main class="game-main play-final"><div class="final-confetti" aria-hidden="true">${Array.from({ length: 18 }, (_, index) => `<i style="--confetti-left:${(index + 1) * 5.2}%;--confetti-delay:${index * 42}ms"></i>`).join('')}</div><section class="final-scene paper-panel"><div class="final-art">${artFn('garden-picnic', 'festa na clareira')}</div><div><span class="chapter-pill"><span class="chapter-dot"></span> MISTÉRIO RESOLVIDO</span><h1>A fruta virou festa!</h1><p class="final-proof">${final ? moments[5].filled(final.rows) : ''}</p><p>${final ? escapeHtml(rowValue(final.rows[0], 'Guardou a fruta para a torta surpresa da festa.')) : ''}</p><p>Adão trouxe a toalha, Pardal decorou a mesa com a fita e Cobra chegou com o chapéu. Faltaram só os guardanapos.</p><div class="fiction-note">✧ História inventada para o jogo, inspirada no relato bíblico — sem data histórica</div><div class="home-actions"><a class="game-button" href="/" data-nav>Voltar ao início</a><a class="outline-button" href="/explorar" data-nav>Explorar a linha do tempo</a></div><button class="text-button" data-act="restart" type="button">Jogar de novo</button></div></section></main>`;
 }
 
 export function gameMarkup(baseArt: SceneArt): string {
   artFn = baseArt;
-  if (state.phase === 6) return `${headerMarkup()}${finalMarkup()}`;
+  if (state.phase === 6) return `${headerMarkup()}${finalMarkup()}${notesMarkup()}`;
   const found = !!state.discoveries[state.phase];
   return `<div class="play-shell" data-tab="${ui.mobileTab}" data-found="${found}"><div class="play-top">${headerMarkup()}${mobileGapMarkup()}</div><main class="play">
     ${sceneMarkup()}
     <div class="play-workspace">${bankMarkup()}${queryMarkup()}</div>
     ${mapDialog()}
-  </main>${mobileBarMarkup()}</div>`;
+  </main>${mobileBarMarkup()}${notesMarkup()}</div>`;
 }
 
 type Region = 'header' | 'scene' | 'bank' | 'mission' | 'result' | 'mobile';
@@ -661,6 +470,12 @@ function refresh(...regions: Region[]): void {
   setBusy(ui.processing);
 }
 
+function refreshResultWithMotion(motion: FeedbackMotion): void {
+  ui.feedbackMotion = motion;
+  refresh('result');
+  ui.feedbackMotion = '';
+}
+
 function mount(): void {
   if (!root) return;
   destroySqlEditors(root);
@@ -669,19 +484,107 @@ function mount(): void {
   window.scrollTo({ top: 0, behavior: 'instant' });
 }
 
+// A máscara guia quem está começando; quem prefere pode escrever a consulta inteira.
+function isGuided(moment: Moment): boolean {
+  return !!moment.guide && !(ui.freeMode && moment.free);
+}
+
+function remountQuery(): void {
+  const section = root?.querySelector<HTMLElement>('#play-query');
+  if (!section) return;
+  destroySqlEditors(section);
+  section.outerHTML = queryMarkup();
+  afterRender();
+  getSqlEditor(root?.querySelector<HTMLElement>('#sql-editor'))?.focus();
+}
+
 function afterRender(): void {
   const host = root?.querySelector<HTMLElement>('#sql-editor');
   if (host) {
     const moment = moments[state.phase];
-    const guided = !!moment.guide;
+    const guided = isGuided(moment);
     mountSqlEditor(host, {
-      value: guided ? moment.starter : readDraft() ?? moment.starter,
+      value: guided ? moment.starter : readDraft() ?? moment.free ?? moment.starter,
       guided,
       onChange: guided ? undefined : saveDraft,
       onRun: () => { void runQuery(); }
     });
   }
   if (ui.bankTab === 'records') ensureRecords(ui.recordsTable);
+}
+
+/* ---------- Anotações ---------- */
+
+// Bloco livre do jogador. Fica fora do estado da história: sobrevive à troca de momento e a "Reiniciar história".
+const notesKey = 'worlddb-garden-notes-v1';
+const notesLimit = 4000;
+let notes = readNotes();
+let notesOpen = false;
+let clearTimer = 0;
+
+function readNotes(): string {
+  try { return (localStorage.getItem(notesKey) ?? '').slice(0, notesLimit); } catch { return ''; }
+}
+
+function saveNotes(): void {
+  try {
+    if (notes) localStorage.setItem(notesKey, notes);
+    else localStorage.removeItem(notesKey);
+  } catch { /* As anotações valem só para esta visita. */ }
+}
+
+const notesIcon = '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5h9.5L19 7v13.5H6Z" fill="#fffdf6"/><path d="M15.5 3.5V7H19M9 11h7M9 14.5h7M9 18h4"/><path d="M4 7h3M4 11h3M4 15h3"/></svg>';
+
+function notesMarkup(): string {
+  return `<button type="button" class="play-notes-button ${notes ? 'has-notes' : ''}" data-act="notes" aria-expanded="${notesOpen}" aria-controls="play-notes" aria-label="Anotações" title="Anotações">${notesIcon}<span class="play-notes-dot" aria-hidden="true"></span></button>
+  <aside id="play-notes" class="play-notes" aria-labelledby="notes-title" ${notesOpen ? '' : 'hidden'}>
+    <div class="play-pop-head"><span id="notes-title" class="section-eyebrow">Suas anotações</span><button type="button" class="play-close" data-act="notes">fechar ×</button></div>
+    <textarea id="play-notes-text" class="play-notes-text" maxlength="${notesLimit}" spellcheck="false" placeholder="Anote suspeitos, horários, IDs… o que ajudar na investigação." aria-labelledby="notes-title" aria-describedby="notes-status">${escapeHtml(notes)}</textarea>
+    <div class="play-notes-foot"><span id="notes-status" role="status" aria-live="polite">${notesStatus()}</span><button type="button" class="text-button" data-act="notes-clear" ${notes ? '' : 'disabled'}>Limpar</button></div>
+  </aside>`;
+}
+
+function notesStatus(): string {
+  return notes ? `Guardado neste navegador · ${notes.length} de ${notesLimit}` : 'Fica guardado só neste navegador';
+}
+
+function syncNotes(): void {
+  const status = root?.querySelector('#notes-status');
+  if (status) status.textContent = notesStatus();
+  const clear = root?.querySelector<HTMLButtonElement>('[data-act="notes-clear"]');
+  if (clear) { clear.disabled = !notes; clear.textContent = 'Limpar'; delete clear.dataset.confirm; }
+  root?.querySelectorAll('.play-notes-button').forEach(button => button.classList.toggle('has-notes', !!notes));
+}
+
+function toggleNotes(open = !notesOpen): void {
+  notesOpen = open;
+  const panel = root?.querySelector<HTMLElement>('#play-notes');
+  const trigger = root?.querySelector<HTMLElement>('.play-notes-button');
+  if (!panel) return;
+  panel.hidden = !open;
+  trigger?.setAttribute('aria-expanded', String(open));
+  if (open) {
+    closePopovers();
+    const text = panel.querySelector<HTMLTextAreaElement>('#play-notes-text');
+    text?.focus();
+    text?.setSelectionRange(text.value.length, text.value.length);
+  } else if (panel.contains(document.activeElement)) trigger?.focus();
+}
+
+// Apagar pede um segundo clique, para um toque sem querer não levar as anotações embora.
+function clearNotes(button: HTMLElement): void {
+  window.clearTimeout(clearTimer);
+  if (!button.dataset.confirm) {
+    button.dataset.confirm = 'true';
+    button.textContent = 'Apagar tudo?';
+    clearTimer = window.setTimeout(syncNotes, 3500);
+    return;
+  }
+  notes = '';
+  saveNotes();
+  const text = root?.querySelector<HTMLTextAreaElement>('#play-notes-text');
+  if (text) { text.value = ''; text.focus(); }
+  syncNotes();
 }
 
 /* ---------- Rascunho ---------- */
@@ -723,14 +626,6 @@ function ensureRecords(name: string): void {
   });
 }
 
-function matchingDiscovery(result: QueryResult, index: number): Discovery | null {
-  const rows = result.values.map(row => row.map(String));
-  const expected = expectedRows[index];
-  if (rows.length !== expected.length) return null;
-  if (!expected.every(required => rows.filter(row => required.every(value => row.includes(value))).length === 1)) return null;
-  return { rows: result.values, columns: result.columns };
-}
-
 function readableError(message: string): string {
   if (message.includes('no such table')) return `Não encontrei essa tabela. Confira o Banco do Jardim. (${message})`;
   if (message.includes('no such column')) return `Não encontrei essa coluna. Confira os nomes no diagrama. (${message})`;
@@ -751,12 +646,12 @@ async function runQuery(): Promise<void> {
   if (editor.remainingSlots) {
     ui.error = `Preencha ${editor.remainingSlots === 1 ? 'o espaço que falta' : `os ${editor.remainingSlots} espaços que faltam`} antes de executar.`;
     setEditorStatus(editor, `${editor.remainingSlots} ${editor.remainingSlots === 1 ? 'espaço restante' : 'espaços restantes'}`);
-    refresh('result');
+    refreshResultWithMotion('error');
     return;
   }
   if (!editor.executableValue.replace(/--[^\n]*/g, '').trim()) {
     ui.error = 'Digite uma consulta antes de executar.';
-    refresh('result');
+    refreshResultWithMotion('error');
     return;
   }
   playSound('click');
@@ -793,15 +688,17 @@ async function runQuery(): Promise<void> {
           ensureRecords('personagens');
         }
       }
+      ui.feedbackMotion = fresh ? 'success' : '';
       refresh('header', 'scene', 'bank', 'mission', 'result', 'mobile');
       ui.justFound = false;
+      ui.feedbackMotion = '';
     } else {
       const moment = moments[phase];
       const message = state.discoveries[phase]
         ? 'Consulta válida. A pista deste momento já está no caderno.'
         : `Consulta válida, mas essa ainda não fecha a pista. ${moment.hints[Math.min(ui.hintIndex++, moment.hints.length - 1)]}`;
       ui.result = { ...result, found: false, message };
-      refresh('result');
+      refreshResultWithMotion('hint');
     }
   } catch (error) {
     if (state.phase !== phase || !editor.isConnected) return;
@@ -809,7 +706,7 @@ async function runQuery(): Promise<void> {
     ui.result = null;
     ui.error = readableError(error instanceof Error ? error.message : 'Erro desconhecido.');
     setEditorStatus(editor, '✕ a consulta não rodou', 'is-error');
-    refresh('result');
+    refreshResultWithMotion('error');
   }
 }
 
@@ -824,6 +721,11 @@ function togglePopover(id: 'play-journal' | 'play-menu', open?: boolean): void {
   trigger.setAttribute('aria-expanded', String(next));
 }
 
+// No celular o bloco ocupa o mesmo lugar do caderno e do menu, então abrir um fecha o outro.
+function toggleNotesForPopover(): void {
+  if (notesOpen && mobileLayout.matches) toggleNotes(false);
+}
+
 function closePopovers(): void {
   togglePopover('play-journal', false);
   togglePopover('play-menu', false);
@@ -836,12 +738,51 @@ function setMobileTab(tab: MobileTab): void {
   window.scrollTo({ top: 0, behavior: 'instant' });
 }
 
+function completionMarkup(final: boolean): string {
+  const label = final ? 'Mistério resolvido!' : 'Pista guardada!';
+  const detail = final ? 'Você conectou todas as pistas do Jardim.' : `Momento ${state.phase + 1} de ${moments.length} concluído`;
+  return `<div class="play-complete-overlay" role="status" aria-live="assertive">
+    <div class="play-complete-card">
+      <span class="play-complete-check" aria-hidden="true">✓</span>
+      <span class="section-eyebrow">${detail}</span>
+      <strong>${label}</strong>
+    </div>
+    <span class="play-complete-orbit" aria-hidden="true"></span>
+  </div>`;
+}
+
+async function advanceMoment(): Promise<void> {
+  if (!root || advancing || !state.discoveries[state.phase]) return;
+  advancing = true;
+  const activeController = controller;
+  const final = state.phase === 5;
+  playSound(final ? 'finish' : 'click');
+  root.querySelectorAll<HTMLButtonElement>('[data-act="next"]').forEach(button => { button.disabled = true; });
+  if (!reducedMotion.matches) {
+    root.insertAdjacentHTML('beforeend', completionMarkup(final));
+    await new Promise(resolve => window.setTimeout(resolve, final ? 900 : 720));
+  }
+  if (activeController?.signal.aborted) {
+    advancing = false;
+    return;
+  }
+  state.phase++;
+  saveStory();
+  clearDraft();
+  ui = freshUi();
+  advancing = false;
+  mount();
+}
+
 function onClick(event: MouseEvent): void {
   const target = (event.target as HTMLElement).closest<HTMLElement>('[data-act]');
   if (!target) return;
   const act = target.dataset.act;
+  if (act === 'journal' || act === 'menu') toggleNotesForPopover();
   if (act === 'journal') { togglePopover('play-menu', false); togglePopover('play-journal'); }
   else if (act === 'menu') { togglePopover('play-journal', false); togglePopover('play-menu'); }
+  else if (act === 'notes') toggleNotes();
+  else if (act === 'notes-clear') clearNotes(target);
   else if (act === 'sound') {
     soundEnabled = !soundEnabled;
     saveSound();
@@ -860,13 +801,7 @@ function onClick(event: MouseEvent): void {
     ui = freshUi();
     mount();
   } else if (act === 'next') {
-    if (!state.discoveries[state.phase]) return;
-    playSound(state.phase === 5 ? 'finish' : 'click');
-    state.phase++;
-    saveStory();
-    clearDraft();
-    ui = freshUi();
-    mount();
+    void advanceMoment();
   } else if (act === 'bank-tab') {
     ui.bankTab = target.dataset.tab as BankTab;
     if (ui.bankTab === 'records') ensureRecords(ui.recordsTable);
@@ -894,7 +829,11 @@ function onClick(event: MouseEvent): void {
     playSound('click');
     const hints = moments[state.phase].hints;
     ui.hint = hints[Math.min(ui.hintIndex++, hints.length - 1)];
-    refresh('result');
+    refreshResultWithMotion('hint');
+  } else if (act === 'free-mode') {
+    ui.freeMode = !ui.freeMode;
+    ui.error = '';
+    remountQuery();
   } else if (act === 'mobile-tab') setMobileTab(target.dataset.tab as MobileTab);
   else if (act === 'token') insertToken(target);
 }
@@ -921,11 +860,20 @@ export function bindGame(app: HTMLDivElement, sceneArt: SceneArt): void {
   }, { signal });
   document.addEventListener('keydown', event => {
     if (event.key !== 'Escape') return;
+    if (notesOpen && root?.querySelector('#play-notes')?.contains(document.activeElement)) { toggleNotes(false); return; }
     const open = root?.querySelector<HTMLElement>('.play-popover:not([hidden])');
     if (!open) return;
     closePopovers();
     root?.querySelector<HTMLElement>(`[aria-controls="${open.id}"]`)?.focus();
   }, { signal });
   mobileLayout.addEventListener('change', () => { if (state.phase < 6) refresh('mobile'); }, { signal });
+  app.addEventListener('input', event => {
+    const text = event.target as HTMLTextAreaElement;
+    if (text.id !== 'play-notes-text') return;
+    notes = text.value.slice(0, notesLimit);
+    saveNotes();
+    window.clearTimeout(clearTimer);
+    syncNotes();
+  }, { signal });
   afterRender();
 }
